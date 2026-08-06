@@ -1,0 +1,16 @@
+[project]
+name = "fake-headline-predictor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "nest-asyncio>=1.6.0",
+    "playwright>=1.62.0",
+    "requests>=2.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+]

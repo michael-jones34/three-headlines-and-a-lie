@@ -7,6 +7,7 @@ from datetime import datetime
 import re
 from urllib.parse import urlsplit
 import time
+import traceback
 
 load_dotenv("../.env")
 
@@ -58,10 +59,10 @@ def scrape_edition(client, slug):
 
     time.sleep(6) # To buffer Firecrawl requests
 
-    return scraped_edition
+    return scraped_edition.markdown
 
 def filter_parts(scraped_edition):
-    split_quiz = scraped_edition.markdown.split("<br>")
+    split_quiz = scraped_edition.split("<br>")
 
     # Looking for question structure as per "1. Knicks blowout prompts NYC bar to [slash](https://links.morningbrew.com/c/Qbk?mblid=b89ba0a52c84&mbnlid=pe857ob96pFFOtePNArveW)"
     q_search = re.compile(r'^[1234]\. (“)?.*\[([\w\s\.\-])*\](\(.*\))')
@@ -107,19 +108,27 @@ def url_headline_extract(index, questions_and_answers):
 
     return headline, url
 
-def process_edition(index, full_archive_metadata, date):
+def process_edition(index, full_archive_metadata, date, archive, iso_date):
     edition_metadata = full_archive_metadata[index]
     edition_id = edition_metadata["_id"]
     slug = extract_slug(edition_metadata, date)
-    scraped_edition = scrape_edition(slug)
-    print("Edition scraped")
 
-    edition = {
-        "_id" : edition_id,
-        "date" : date.isoformat(),
-        "slug" : slug,
-        "content" : scraped_edition.markdown
-    }
+    if any(archive_edition["date"] == iso_date for archive_edition in archive):
+        print(f"Edition for {iso_date} found")
+        edition = next(archive_edition for archive_edition in archive if archive_edition["date"] == iso_date)
+        scraped_edition = edition["content"]
+    else:
+        scraped_edition = scrape_edition(client, slug)
+        print("Edition scraped")
+
+        edition = {
+            "_id" : edition_id,
+            "date" : date.isoformat(),
+            "slug" : slug,
+            "content" : scraped_edition
+        }
+
+        append_and_store_edition(edition, archive)
 
     questions_and_answers = filter_parts(scraped_edition)
     questions_and_answers = clean_q4_and_answer(questions_and_answers)
@@ -142,23 +151,28 @@ def process_edition(index, full_archive_metadata, date):
 
     print(json.dumps(quiz, indent=2))
 
-    return edition, quiz
+    return quiz
 
-def append_and_store(edition, quiz, archive, quizzes):
+def append_and_store_edition(edition, archive):
 
     archive.append(edition)
-    quizzes.append(quiz)
 
     archive.sort(key=lambda x: x["date"])
-    quizzes.sort(key=lambda x: x["date"])
 
     with open(f"{data_path}/archive.json", "w") as f:
         json.dump(archive, f, indent=2)
 
+
+def append_and_store_quiz(quiz, quizzes):
+
+    quizzes.append(quiz)
+
+    quizzes.sort(key=lambda x: x["date"])
+
     with open(f"{data_path}/quizzes.json", "w") as f:
         json.dump(quizzes, f, indent=2)
 
-def check_existence_process_append_store(date, index, full_archive_metadata):
+def check_existence_process_append_store(date, index, full_archive_metadata, exceptions):
 
     # Check to see if archive and quizzes exist, if not create blank list
     if os.path.isfile(f"{data_path}/archive.json"):
@@ -166,6 +180,7 @@ def check_existence_process_append_store(date, index, full_archive_metadata):
             archive = json.load(f)
     else:
         archive = []
+
     if os.path.isfile(f"{data_path}/quizzes.json"):
             with open(f"{data_path}/quizzes.json", "r") as f:
                 quizzes = json.load(f)
@@ -174,16 +189,27 @@ def check_existence_process_append_store(date, index, full_archive_metadata):
 
     iso_date = date.isoformat()
 
-    if any(archive_edition["date"] == iso_date for archive_edition in archive):
-        print(f"Edition for {iso_date} found")
+    if any(quizzes_edition["date"] == iso_date for quizzes_edition in quizzes):
+        print(f"Quiz for {iso_date} found")
         return
     else:
-        edition, quiz = process_edition(index, full_archive_metadata, date)
-        append_and_store(edition, quiz, archive, quizzes)
+        try:
+            quiz = process_edition(index, full_archive_metadata, date, archive, iso_date)
+            append_and_store_quiz(quiz, quizzes)
+        except Exception as e:
+            print(f"Failed to process {date}: {e}")
+            exception = {
+                "Date" : iso_date,
+                "Exception" : traceback.format_exc().splitlines()
+            }
+            exceptions.append(exception)
+            with open(f"{data_path}/exceptions.json", "w") as f:
+                json.dump(exceptions, f, indent=2)
 
 def main():
 
-    full_archive_metadata = scrape_archive_metadata()
+    full_archive_metadata = scrape_archive_metadata(client)
+    exceptions = []
 
     for index, item in enumerate(full_archive_metadata):
         # if index < 395:
@@ -193,7 +219,7 @@ def main():
 
         if selection_logic(date):
             print("Processing edition with quiz")
-            check_existence_process_append_store(date, index, full_archive_metadata)
+            check_existence_process_append_store(date, index, full_archive_metadata, exceptions)
 
 if __name__ == "__main__":
     main() 

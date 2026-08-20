@@ -17,6 +17,7 @@ client = Firecrawl(api_key=api_key)
 
 first_thursday = datetime.fromisoformat("2020-11-05").date()
 first_worded_slug = datetime.fromisoformat("2021-09-30").date()
+first_quiz = datetime.fromisoformat("2019-10-26").date()
 valid_weekdays = [3,5] # Thursday, Saturday
 
 data_path = "../data"
@@ -33,11 +34,15 @@ def scrape_archive_metadata(client):
     return json.loads(result.markdown.strip("'`json\n"))
 
 def selection_logic(date):
+    ignore = ["2024-12-26", "2023-12-28", "2023-04-13", "2022-03-24", "2021-01-07", "2020-12-24"]
+    iso_date = date.isoformat()
     if date.weekday() not in valid_weekdays:
+        return False
+    elif iso_date in ignore:
         return False
     elif date.weekday() == 3 and date >= first_thursday:
         return True
-    elif date.weekday() == 5 and date < first_thursday:
+    elif date.weekday() == 5 and date < first_thursday and date >= first_quiz:
         return True
     else:
         return False
@@ -51,42 +56,88 @@ def extract_slug(edition_metadata, date):
     else:
         return edition_metadata["slug"].replace("/", "%2F")
 
-def scrape_edition(client, slug):
-    scraped_edition = client.scrape(
-        f"https://www.morningbrew.com/issues/{slug}",
-        formats=["markdown"]
-    )
+def scrape_or_load_edition(client, slug, edition_id, iso_date, archive):
 
-    time.sleep(6) # To buffer Firecrawl requests
+    if any(archive_edition["date"] == iso_date for archive_edition in archive):
+        print(f"Edition for {iso_date} found")
+        edition = next(archive_edition for archive_edition in archive if archive_edition["date"] == iso_date)
+        scraped_edition = edition["content"]
+        return scraped_edition
 
-    return scraped_edition.markdown
+    else:
+        scraped_edition = client.scrape(
+            f"https://www.morningbrew.com/issues/{slug}",
+            formats=["markdown"]
+        ).markdown
 
-def filter_parts(scraped_edition):
+        time.sleep(6) # To buffer Firecrawl requests
+
+        print("Edition scraped")
+        
+        edition = {
+            "_id" : edition_id,
+            "date" : iso_date,
+            "slug" : slug,
+            "content" : scraped_edition
+        }
+
+        append_and_store_edition(edition, archive)
+
+        return scraped_edition
+
+def filter_and_clean_parts(scraped_edition):
     split_quiz = scraped_edition.split("<br>")
 
     # Looking for question structure as per "1. Knicks blowout prompts NYC bar to [slash](https://links.morningbrew.com/c/Qbk?mblid=b89ba0a52c84&mbnlid=pe857ob96pFFOtePNArveW)"
-    q_search = re.compile(r'^[1234]\. (“)?.*\[([\w\s\.\-])*\](\(.*\))')
+    q_search = re.compile(r'^[1234]\. (“)?.*\[([^\]]*)\](\(.*\))')
     answer_search = re.compile(r'(\banswer)(s?)(\b)')
+    answer_hash_search = re.compile(r'(\s### answer)(s)?')
+    answer_hash_search2 = re.compile(r'(\s# \[answer\])(s)?')
+    answer_saturday_hash_search = re.compile(r'(\s### saturday headline)(s)?( answer)(s)?')
 
-    questions_and_answers = [item for item in split_quiz if q_search.search(item.lower()) or (answer_search.search(item.lower()) and item.startswith("[morningbrew.com"))]
+    questions_and_answers = [item for item in split_quiz if q_search.search(item.lower())]
 
-    if len(questions_and_answers) > 5:
-        del questions_and_answers[5:]
+    if len (questions_and_answers) > 4:
+        del questions_and_answers[:-4]
+
+    if answer_search.search(questions_and_answers[3].lower()) or answer_hash_search.search(questions_and_answers[3].lower()) or answer_hash_search2.search(questions_and_answers[3].lower()):
+        answer_rough = questions_and_answers[3].lower().split("answer")[1]
+        answer = answer_rough.strip(" |\n")
+        questions_and_answers.append(answer)
+    else:
+        answer = [item for item in split_quiz if (answer_search.search(item.lower()) and item.startswith("[morningbrew.com")) 
+                                                or answer_hash_search.search(item.lower())
+                                                or answer_hash_search2.search(item.lower())
+                                                or answer_saturday_hash_search.search(item.lower())][0]
+
+        answer_index = answer.lower().find("answer")
+        answer_rough = answer[answer_index:]
+        # print(answer_rough)
+        answer_parts = answer_rough.split("|")
+        answer_parts_stripped = [item.strip().strip("\n-") for item in answer_parts]
+        answer_parts_stripped[0] = ""
+        answer_list = [item for item in answer_parts_stripped if item]
+        answer = answer_list[0]
+        questions_and_answers.append(answer)
+
+    # Clean up question 4
+    questions_and_answers[3] = (questions_and_answers[3].split("|"))[0]
 
     return questions_and_answers
 
 def clean_q4_and_answer(questions_and_answers):
 
-    # Answer is sometimes in same chunk as question 4
-    if len(questions_and_answers) == 4:
-        answer_rough = questions_and_answers[3].lower().split("answer")[1]
-        answer = answer_rough.strip(" |\n")
-        questions_and_answers.append(answer)
+    # # Answer is sometimes in same chunk as question 4
+    if len(questions_and_answers) != 4:
+        # answer_rough = questions_and_answers[3].lower().split("answer")[1]
+        # answer = answer_rough.strip(" |\n")
+        # questions_and_answers.append(answer)
 
     # Most of the time they're separate    
-    else:
+    # else:
         answer_index = questions_and_answers[4].lower().find("answer")
         answer_rough = questions_and_answers[4][answer_index:]
+        # print(answer_rough)
         answer_parts = answer_rough.split("|")
         answer_parts_stripped = [item.strip().strip("\n-") for item in answer_parts]
         answer_parts_stripped[0] = ""
@@ -113,25 +164,10 @@ def process_edition(index, full_archive_metadata, date, archive, iso_date):
     edition_id = edition_metadata["_id"]
     slug = extract_slug(edition_metadata, date)
 
-    if any(archive_edition["date"] == iso_date for archive_edition in archive):
-        print(f"Edition for {iso_date} found")
-        edition = next(archive_edition for archive_edition in archive if archive_edition["date"] == iso_date)
-        scraped_edition = edition["content"]
-    else:
-        scraped_edition = scrape_edition(client, slug)
-        print("Edition scraped")
+    scraped_edition = scrape_or_load_edition(client, slug, edition_id, iso_date, archive)
 
-        edition = {
-            "_id" : edition_id,
-            "date" : date.isoformat(),
-            "slug" : slug,
-            "content" : scraped_edition
-        }
-
-        append_and_store_edition(edition, archive)
-
-    questions_and_answers = filter_parts(scraped_edition)
-    questions_and_answers = clean_q4_and_answer(questions_and_answers)
+    questions_and_answers = filter_and_clean_parts(scraped_edition)
+    # questions_and_answers = clean_q4_and_answer(questions_and_answers)
 
     quiz = {
             "_id": edition_id,
@@ -142,12 +178,15 @@ def process_edition(index, full_archive_metadata, date, archive, iso_date):
         }
 
     print("Extracting headline text and URLs")
-    for index, item in enumerate(questions_and_answers):
-        if item[0].isalpha():
-            continue
-        else:
+    for index in range(4):
+        if index < 4:
             headline, url = url_headline_extract(index, questions_and_answers)
             quiz["headlines"].append({"text": headline, "url": url})
+        # if item[0].isalpha():
+        #     continue
+
+        # else:
+            
 
     print(json.dumps(quiz, indent=2))
 
@@ -161,7 +200,6 @@ def append_and_store_edition(edition, archive):
 
     with open(f"{data_path}/archive.json", "w") as f:
         json.dump(archive, f, indent=2)
-
 
 def append_and_store_quiz(quiz, quizzes):
 
@@ -212,9 +250,7 @@ def main():
     exceptions = []
 
     for index, item in enumerate(full_archive_metadata):
-        # if index < 395:
-        #     continue
-
+  
         date = processed_date(item)
 
         if selection_logic(date):

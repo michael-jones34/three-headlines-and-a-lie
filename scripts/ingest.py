@@ -132,30 +132,6 @@ def filter_and_clean_parts(scraped_edition):
 
     return questions_and_answers
 
-def clean_q4_and_answer(questions_and_answers):
-
-    # # Answer is sometimes in same chunk as question 4
-    if len(questions_and_answers) != 4:
-        # answer_rough = questions_and_answers[3].lower().split("answer")[1]
-        # answer = answer_rough.strip(" |\n")
-        # questions_and_answers.append(answer)
-
-    # Most of the time they're separate    
-    # else:
-        answer_index = questions_and_answers[4].lower().find("answer")
-        answer_rough = questions_and_answers[4][answer_index:]
-        # print(answer_rough)
-        answer_parts = answer_rough.split("|")
-        answer_parts_stripped = [item.strip().strip("\n-") for item in answer_parts]
-        answer_parts_stripped[0] = ""
-        answer_list = [item for item in answer_parts_stripped if item]
-        answer = answer_list[0]
-        questions_and_answers[4] = answer
-
-    # Clean up question 4
-    questions_and_answers[3] = (questions_and_answers[3].split("|"))[0]
-    return questions_and_answers
-
 def url_headline_extract(index, questions_and_answers):
     url = re.compile(r'(\(.*?\))').search(questions_and_answers[index]).group().strip("()")
     headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. “").rstrip("”")
@@ -177,7 +153,6 @@ def process_edition(index, full_archive_metadata, date, archive, iso_date):
     scraped_edition = scrape_or_load_edition(client, slug, edition_id, iso_date, archive)
 
     questions_and_answers = filter_and_clean_parts(scraped_edition)
-    # questions_and_answers = clean_q4_and_answer(questions_and_answers)
 
     quiz = {
             "_id": edition_id,
@@ -189,15 +164,9 @@ def process_edition(index, full_archive_metadata, date, archive, iso_date):
 
     print("Extracting headline text and URLs")
     for index in range(4):
-        if index < 4:
-            headline, url = url_headline_extract(index, questions_and_answers)
-            quiz["headlines"].append({"text": headline, "url": url})
-        # if item[0].isalpha():
-        #     continue
-
-        # else:
-            
-
+        headline, url = url_headline_extract(index, questions_and_answers)
+        quiz["headlines"].append({"text": headline, "url": url})
+       
     print(json.dumps(quiz, indent=2))
 
     return quiz

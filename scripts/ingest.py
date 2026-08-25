@@ -34,17 +34,19 @@ def scrape_archive_metadata(client):
     return json.loads(result.markdown.strip("'`json\n"))
 
 def selection_logic(date):
-    ignore = ["2024-12-26", # Special edition with Golden Mug awards, no quiz
-              "2023-12-28", # Special edition with photos of the year, no quiz
-              "2023-04-13", # Tax edition, they're not really headlines
-              "2023-01-05", # Tax edition, they're not really headlines
-              "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
-              "2021-01-07", # No quiz as it was the day after January 6th
-              "2020-12-24"] # Had a different quiz
+    exceptions = ["2025-12-04", # Answer is in a chunk by itself without answer title, must be manually added
+                "2024-12-26", # Special edition with Golden Mug awards, no quiz
+                "2023-12-28", # Special edition with photos of the year, no quiz
+                "2023-04-13", # Tax edition, they're not really headlines
+                "2023-01-05", # Tax edition, they're not really headlines
+                "2022-06-30", # Headlines are bulleted, must be manually added
+                "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
+                "2021-01-07", # No quiz as it was the day after January 6th
+                "2020-12-24"] # Had a different quiz
     iso_date = date.isoformat()
     if date.weekday() not in valid_weekdays:
         return False
-    elif iso_date in ignore:
+    elif iso_date in exceptions:
         return False
     elif date.weekday() == 3 and date >= first_thursday:
         return True
@@ -115,7 +117,6 @@ def filter_and_clean_parts(scraped_edition):
                                                 or answer_hash_search.search(item.lower())
                                                 or answer_hash_search2.search(item.lower())
                                                 or answer_saturday_hash_search.search(item.lower())][0]
-
         answer_index = answer.lower().find("answer")
         answer_rough = answer[answer_index:]
         answer_parts = answer_rough.split("|")
@@ -123,7 +124,7 @@ def filter_and_clean_parts(scraped_edition):
         answer_parts_stripped[0] = ""
         answer_list = [item for item in answer_parts_stripped if item]
         answer = answer_list[0]
-        if "answer" in answer.lower():
+        if "answer" in answer.lower() and len(answer_list) > 1:
             answer = answer_list[1]
         questions_and_answers.append(answer)
 
@@ -134,7 +135,12 @@ def filter_and_clean_parts(scraped_edition):
 
 def url_headline_extract(index, questions_and_answers):
     url = re.compile(r'(\(.*?\))').search(questions_and_answers[index]).group().strip("()")
-    headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. “").rstrip("”")
+    headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. ").strip()
+    if headline.startswith("“") and headline.endswith("”"):
+        headline = headline.strip("“”")
+    if headline.startswith('"') and headline.endswith('"'):
+        headline = headline.strip('"')
+    headline = headline.strip()
 
     # Take the link that the Morning Brew link points to if it is a Morning Brew type url
     if "morningbrew" in url:

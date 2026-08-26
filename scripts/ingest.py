@@ -134,12 +134,27 @@ def filter_and_clean_parts(scraped_edition):
     return questions_and_answers
 
 def url_headline_extract(index, questions_and_answers):
-    url = re.compile(r'(\(.*?\))').search(questions_and_answers[index]).group().strip("()")
+
+    start = questions_and_answers[index].find("](") + 2
+
+    depth = 1
+    for i in range(start, len(questions_and_answers[index])):
+        if questions_and_answers[index][i] == "(":
+            depth += 1
+        elif questions_and_answers[index][i] == ")":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+
+    url = questions_and_answers[index][start:end]
+
     headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. ").strip()
-    if headline.startswith("“") and headline.endswith("”"):
-        headline = headline.strip("“”")
-    if headline.startswith('"') and headline.endswith('"'):
-        headline = headline.strip('"')
+    if (headline.startswith("“") and headline.endswith("”") or 
+        headline.startswith('"') and headline.endswith('"') or 
+        headline.startswith('“') and headline.endswith('"') or 
+        headline.startswith('"') and headline.endswith('”')):
+        headline = headline.strip('“”"')
     headline = headline.strip()
 
     # Take the link that the Morning Brew link points to if it is a Morning Brew type url
@@ -147,7 +162,7 @@ def url_headline_extract(index, questions_and_answers):
         url = urlsplit(requests.get(url, allow_redirects=False, timeout=10).headers.get("Location"))._replace(query="").geturl()
     # Remove Morning Brew tracking information if it exists
     else:
-        url = urlsplit(url)._replace(query="").geturl()
+        url = urlsplit(url)._replace(query="", fragment="").geturl()
 
     return headline, url
 
@@ -241,6 +256,17 @@ def main():
         if selection_logic(date):
             print("Processing edition with quiz")
             check_existence_process_append_store(date, index, full_archive_metadata, exceptions)
+
+    with open(f"{data_path}/quizzes.json", "r") as f:
+        quizzes = json.load(f)
+
+    with open(f"{data_path}/manual_quiz_additions.json", "r") as f:
+        manual_quiz_additions = json.load(f)
+
+    for manual_quiz_addition in manual_quiz_additions:
+        if not any(quiz["date"] == manual_quiz_addition["date"] for quiz in quizzes):
+            append_and_store_quiz(manual_quiz_addition, quizzes)
+        
 
 if __name__ == "__main__":
     main() 

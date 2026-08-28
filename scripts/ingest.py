@@ -11,14 +11,25 @@ import traceback
 
 load_dotenv("../.env")
 
-api_key = os.getenv("FIRECRAWL_API_KEY")
+firecrawl_api_key = os.getenv("FIRECRAWL_API_KEY")
 
-client = Firecrawl(api_key=api_key)
+client = Firecrawl(api_key=firecrawl_api_key)
 
-first_thursday = datetime.fromisoformat("2020-11-05").date()
-first_worded_slug = datetime.fromisoformat("2021-09-30").date()
-first_quiz = datetime.fromisoformat("2019-10-26").date()
-valid_weekdays = [3,5] # Thursday, Saturday
+FIRST_THURSDAY = datetime.fromisoformat("2020-11-05").date()
+FIRST_WORDED_SLUG = datetime.fromisoformat("2021-09-30").date()
+FIRST_QUIZ = datetime.fromisoformat("2019-10-26").date()
+VALID_WEEKDAYS = {3, 5} # Thursday, Saturday
+EXCLUDED_DATES = {
+    "2025-12-04", # Answer is in a chunk by itself without answer title, must be manually added
+    "2024-12-26", # Special edition with Golden Mug awards, no quiz
+    "2023-12-28", # Special edition with photos of the year, no quiz
+    "2023-04-13", # Tax edition, they're not really headlines
+    "2023-01-05", # Tax edition, they're not really headlines
+    "2022-06-30", # Headlines are bulleted, must be manually added
+    "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
+    "2021-01-07", # No quiz as it was the day after January 6th
+    "2020-12-24"  # Had a different quiz
+}
 
 data_path = "../data"
 
@@ -34,37 +45,30 @@ def scrape_archive_metadata(client):
     return json.loads(result.markdown.strip("'`json\n"))
 
 def selection_logic(date):
-    exceptions = ["2025-12-04", # Answer is in a chunk by itself without answer title, must be manually added
-                "2024-12-26", # Special edition with Golden Mug awards, no quiz
-                "2023-12-28", # Special edition with photos of the year, no quiz
-                "2023-04-13", # Tax edition, they're not really headlines
-                "2023-01-05", # Tax edition, they're not really headlines
-                "2022-06-30", # Headlines are bulleted, must be manually added
-                "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
-                "2021-01-07", # No quiz as it was the day after January 6th
-                "2020-12-24"] # Had a different quiz
     iso_date = date.isoformat()
-    if date.weekday() not in valid_weekdays:
+    if date.weekday() not in VALID_WEEKDAYS:
         return False
-    elif iso_date in exceptions:
+    elif iso_date in EXCLUDED_DATES:
         return False
-    elif date.weekday() == 3 and date >= first_thursday:
+    elif date.weekday() == 3 and date >= FIRST_THURSDAY:
         return True
-    elif date.weekday() == 5 and date < first_thursday and date >= first_quiz:
+    elif date.weekday() == 5 and date < FIRST_THURSDAY and date >= FIRST_QUIZ:
         return True
     else:
         return False
 
 def extract_slug(edition_metadata, date):
-    if date.weekday() == 3 and date >= first_thursday:
-        if date >= first_worded_slug:
+    if date.weekday() == 3 and date >= FIRST_THURSDAY:
+        if date >= FIRST_WORDED_SLUG:
             return edition_metadata["slug"]
         else:
             return edition_metadata["slug"].replace("/", "%2F")
     else:
         return edition_metadata["slug"].replace("/", "%2F")
 
-def scrape_or_load_edition(client, slug, edition_id, iso_date, archive):
+def scrape_or_load_edition(client, slug, edition_id, date, archive):
+
+    iso_date = date.isoformat()
 
     if any(archive_edition["date"] == iso_date for archive_edition in archive):
         print(f"Edition for {iso_date} found")
@@ -105,12 +109,18 @@ def filter_and_clean_parts(scraped_edition):
 
     questions_and_answers = [item for item in split_quiz if q_search.search(item.lower())]
 
+    # It is possible to pick up other numbered list items with hyperlinks earlier on in the newsletter, so only take the last four
     if len (questions_and_answers) > 4:
         del questions_and_answers[:-4]
 
-    if answer_search.search(questions_and_answers[3].lower()) or answer_hash_search.search(questions_and_answers[3].lower()) or answer_hash_search2.search(questions_and_answers[3].lower()):
+    if (answer_search.search(questions_and_answers[3].lower()) 
+    or answer_hash_search.search(questions_and_answers[3].lower()) 
+    or answer_hash_search2.search(questions_and_answers[3].lower())):
         answer_rough = questions_and_answers[3].lower().split("answer")[1]
-        answer = answer_rough.strip(" |\n")
+        answer_parts = answer_rough.split("|")
+        answer_parts_stripped = [item.strip().strip("\n-") for item in answer_parts]
+        answer_list = [item for item in answer_parts_stripped if item]
+        answer = answer_list[0]
         questions_and_answers.append(answer)
     else:
         answer = [item for item in split_quiz if (answer_search.search(item.lower()) and item.startswith("[morningbrew.com")) 
@@ -121,9 +131,11 @@ def filter_and_clean_parts(scraped_edition):
         answer_rough = answer[answer_index:]
         answer_parts = answer_rough.split("|")
         answer_parts_stripped = [item.strip().strip("\n-") for item in answer_parts]
+        # The first part has the answer title in, so this should be made blank
         answer_parts_stripped[0] = ""
         answer_list = [item for item in answer_parts_stripped if item]
         answer = answer_list[0]
+        # Sometimes there is another chunk with "answer" in before the actual answer, so if there is more than one chunk then take the second one
         if "answer" in answer.lower() and len(answer_list) > 1:
             answer = answer_list[1]
         questions_and_answers.append(answer)
@@ -143,35 +155,43 @@ def url_headline_extract(index, questions_and_answers):
             depth += 1
         elif questions_and_answers[index][i] == ")":
             depth -= 1
-            if depth == 0:
+            if depth == 0: # Parser expects valid closing Markdown delimiter
                 end = i
                 break
 
     url = questions_and_answers[index][start:end]
 
     headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. ").strip()
-    if (headline.startswith("“") and headline.endswith("”") or 
-        headline.startswith('"') and headline.endswith('"') or 
-        headline.startswith('“') and headline.endswith('"') or 
-        headline.startswith('"') and headline.endswith('”')):
+    if (headline.startswith("“") and headline.endswith("”")
+    or headline.startswith('"') and headline.endswith('"')
+    or headline.startswith('“') and headline.endswith('"')
+    or headline.startswith('"') and headline.endswith('”')):
         headline = headline.strip('“”"')
     headline = headline.strip()
 
     # Take the link that the Morning Brew link points to if it is a Morning Brew type url
     if "morningbrew" in url:
-        url = urlsplit(requests.get(url, allow_redirects=False, timeout=10).headers.get("Location"))._replace(query="").geturl()
+        redirect_url = requests.get(
+            url, allow_redirects=False, timeout=10
+        ).headers.get("Location")
+
+        if redirect_url is None:
+            raise ValueError(f"No redirect location found for Morning Brew URL: {url}")
+
+        url = urlsplit(redirect_url)._replace(query="", fragment="").geturl()
+
     # Remove Morning Brew tracking information if it exists
     else:
         url = urlsplit(url)._replace(query="", fragment="").geturl()
 
     return headline, url
 
-def process_edition(index, full_archive_metadata, date, archive, iso_date):
+def process_edition(client, index, full_archive_metadata, date, archive):
     edition_metadata = full_archive_metadata[index]
     edition_id = edition_metadata["_id"]
     slug = extract_slug(edition_metadata, date)
 
-    scraped_edition = scrape_or_load_edition(client, slug, edition_id, iso_date, archive)
+    scraped_edition = scrape_or_load_edition(client, slug, edition_id, date, archive)
 
     questions_and_answers = filter_and_clean_parts(scraped_edition)
 
@@ -210,7 +230,7 @@ def append_and_store_quiz(quiz, quizzes):
     with open(f"{data_path}/quizzes.json", "w") as f:
         json.dump(quizzes, f, indent=2)
 
-def check_existence_process_append_store(date, index, full_archive_metadata, exceptions):
+def check_existence_process_append_store(client, date, index, full_archive_metadata, exceptions):
 
     # Check to see if archive and quizzes exist, if not create blank list
     if os.path.isfile(f"{data_path}/archive.json"):
@@ -232,7 +252,7 @@ def check_existence_process_append_store(date, index, full_archive_metadata, exc
         return
     else:
         try:
-            quiz = process_edition(index, full_archive_metadata, date, archive, iso_date)
+            quiz = process_edition(client, index, full_archive_metadata, date, archive)
             append_and_store_quiz(quiz, quizzes)
         except Exception as e:
             print(f"Failed to process {date}: {e}")
@@ -255,7 +275,7 @@ def main():
 
         if selection_logic(date):
             print("Processing edition with quiz")
-            check_existence_process_append_store(date, index, full_archive_metadata, exceptions)
+            check_existence_process_append_store(client, date, index, full_archive_metadata, exceptions)
 
     with open(f"{data_path}/quizzes.json", "r") as f:
         quizzes = json.load(f)
@@ -267,6 +287,5 @@ def main():
         if not any(quiz["date"] == manual_quiz_addition["date"] for quiz in quizzes):
             append_and_store_quiz(manual_quiz_addition, quizzes)
         
-
 if __name__ == "__main__":
     main() 

@@ -2,7 +2,7 @@
 
 ## 1. Objective
 
-This project explores how effectively different machine learning approaches can identify a fabricated headline from a set of four headlines, where three are genuine and one has been intentionally created as part of a quiz format.
+This project explores how effectively different machine learning approaches can identify a fabricated headline from a set of four headlines, where three are genuine and one has been intentionally fabricated as part of a quiz format.
 
 The project will compare a range of approaches, including traditional machine learning models, transformer-based models, and frontier large language models using zero-shot reasoning. The final output will be an application where users can play the headline identification game and compare their performance against the different models.
 

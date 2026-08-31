@@ -20,15 +20,17 @@ FIRST_WORDED_SLUG = datetime.fromisoformat("2021-09-30").date()
 FIRST_QUIZ = datetime.fromisoformat("2019-10-26").date()
 VALID_WEEKDAYS = {3, 5} # Thursday, Saturday
 EXCLUDED_DATES = {
-    "2025-12-04", # Answer is in a chunk by itself without answer title, must be manually added
-    "2024-12-26", # Special edition with Golden Mug awards, no quiz
-    "2023-12-28", # Special edition with photos of the year, no quiz
-    "2023-04-13", # Tax edition, they're not really headlines
-    "2023-01-05", # Tax edition, they're not really headlines
-    "2022-06-30", # Headlines are bulleted, must be manually added
-    "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
+    "2020-01-11", # CES products, not headlines
+    "2020-12-24", # Had a different quiz
     "2021-01-07", # No quiz as it was the day after January 6th
-    "2020-12-24"  # Had a different quiz
+    "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
+    "2022-06-30", # Headlines are bulleted, must be manually added
+    "2022-12-29", # Special edition which recycles others from the whole year
+    "2023-01-05", # Tax edition, they're not really headlines
+    "2023-04-13", # Tax edition, they're not really headlines
+    "2023-12-28", # Special edition with photos of the year, no quiz
+    "2024-12-26", # Special edition with Golden Mug awards, no quiz
+    "2025-12-04" # Answer is in a chunk by itself without answer title, must be manually added
 }
 
 data_path = "../data"

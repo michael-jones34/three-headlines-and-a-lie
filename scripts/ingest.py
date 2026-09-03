@@ -21,26 +21,40 @@ FIRST_QUIZ = datetime.fromisoformat("2019-10-26").date()
 VALID_WEEKDAYS = {3, 5} # Thursday, Saturday
 EXCLUDED_DATES = {
     "2020-01-11", # CES products, not headlines
-    "2020-02-01", # Original edition did not contain a GIF link for the fake article, new GIF link found and edition now manually added
+    "2020-02-01", # Original edition did not contain a GIF link for the fake article and it had a dead article link, new GIF link and article link found and edition now manually added
     "2020-02-08", # Quote marks remained, quotes removed and edition now manually added
     "2020-03-14", # Original edition did not contain a GIF link for the fake article, new GIF link found and edition now manually added
+    "2020-05-16", # Original edition had a dead article link, new article link found and edition now manually added
+    "2020-06-20", # Original edition had a dead article link, new article link found and edition now manually added
     "2020-10-03", # Original edition had a dead GIF link, new GIF link found and edition now manually added
     "2020-12-24", # Had a different quiz
     "2021-01-07", # No quiz as it was the day after January 6th
     "2021-02-18", # Original edition had a dead GIF link, new GIF link found and edition now manually added
+    "2021-04-15", # Original edition had a dead article link, new article link found and edition now manually added
+    "2021-05-20", # Original edition had a dead article link, new article link found and edition now manually added
+    "2021-08-12", # Original edition had a dead article link, new article link found and edition now manually added
+    "2022-04-21", # Original edition had a dead article link, new article link found and edition now manually added
+    "2022-06-09", # Original edition had a dead article link, new article link found and edition now manually added
     "2022-06-16", # Original edition had a dead GIF link, new GIF link found and edition now manually added
+    "2022-06-23", # Original edition had a dead article link, new article link found and edition now manually added
     "2022-03-24", # Has a quiz with three real musical acts and one fake one from Lollapalooza
+    "2022-05-26", # Original edition had a dead article link, new article link found and edition now manually added
     "2022-06-30", # Headlines are bulleted, must be manually added
     "2022-10-27", # Original edition had a dead GIF link, new GIF link found and edition now manually added
     "2022-12-29", # Special edition which recycles others from the whole year
     "2023-01-05", # Tax edition, they're not really headlines
     "2023-04-13", # Tax edition, they're not really headlines
+    "2023-05-18", # Original edition had a dead article link, new article link found and edition now manually added
+    "2023-10-12", # Original edition had a dead article link, new article link found and edition now manually added
+    "2023-11-02", # Original edition had a dead article link, new article link found and edition now manually added
     "2023-12-28", # Special edition with photos of the year, no quiz
     "2024-12-26", # Special edition with Golden Mug awards, no quiz
     "2025-02-06", # Original edition had a dead GIF link, new GIF link found and edition now manually added
     "2025-04-17", # Original edition had an edge case URL that couldn't easily be parsed, URL fixed and edition now manually added
     "2025-06-26", # Original edition had a missing space which couldn't easily be parsed, headline fixed and edition now manually added
-    "2025-12-04" # Answer is in a chunk by itself without answer title, must be manually added
+    "2025-07-24", # Original edition had a dead article link, new article link found and edition now manually added
+    "2025-12-04", # Answer is in a chunk by itself without answer title, must be manually added
+    "2026-01-08"  # Original edition had a dead article link, new article link found and edition now manually added
 }
 
 data_path = "../data"

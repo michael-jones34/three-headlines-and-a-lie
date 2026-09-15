@@ -72,7 +72,7 @@ The project aims to investigate how increasing model sophistication affects perf
 ## 6. Application
 
 ### Core MVP
-- App implemented in Gradio
+- App implemented in Gradio (or similar lightweight frontend application)
 - Introductory screen for user to select number of rounds
 - User presented with set of four headlines and they choose which one they think is fake
 - Colour coded feedback depending on correct or incorrect choice
@@ -81,7 +81,7 @@ The project aims to investigate how increasing model sophistication affects perf
 ## 7. Future Extensions
 
 ### Data and ML
-- Automated data scraping from incoming emails
+- ~~Automated data scraping from incoming emails~~ (The ingestion pipeline works fully on web articles, there is no need to change this)
 - Include more models if it feels valuable
 - Periodic model retraining
 - ML explainability where possible

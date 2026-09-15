@@ -290,6 +290,34 @@ def check_existence_process_append_store(client, date, index, full_archive_metad
             with open(f"{data_path}/exceptions.json", "w") as f:
                 json.dump(exceptions, f, indent=2)
 
+def identify_answer(headlines):
+    for index, item in enumerate(headlines):
+        if "giphy" in item["url"]:
+            return index
+        # Handle the two editions without a giphy link
+        elif item["url"] == "https://www.theonion.com/cash-strapped-men-s-wearhouse-now-offering-free-measure-1840982358":
+            return 3
+        elif item["url"] == "https://www.wired.com/story/coronavirus-is-it-time-for-elbow-bump-emoji/":
+            return 1
+
+def create_ml_dataset():
+
+    ml_dataset = []
+
+    with open(f"{data_path}/quizzes.json", "r") as f:
+        quizzes = json.load(f)
+
+    for item in quizzes:
+        quiz = {
+            "date": item["date"],
+            "headlines": [headline["text"] for headline in item["headlines"]],
+            "answer": identify_answer(item["headlines"])
+        }
+        ml_dataset.append(quiz)
+
+    with open(f"{data_path}/ml_dataset.json", "w") as f:
+        json.dump(ml_dataset, f, indent=2)
+
 def main():
 
     full_archive_metadata = scrape_archive_metadata(client)
@@ -312,6 +340,8 @@ def main():
     for manual_quiz_addition in manual_quiz_additions:
         if not any(quiz["date"] == manual_quiz_addition["date"] for quiz in quizzes):
             append_and_store_quiz(manual_quiz_addition, quizzes)
-        
+
+    create_ml_dataset()
+          
 if __name__ == "__main__":
     main() 

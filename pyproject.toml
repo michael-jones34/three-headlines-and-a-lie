@@ -24,6 +24,7 @@ dependencies = [
     "sentence-transformers>=6.0.1",
     "trl>=1.13.0",
     "torch==2.14.0",
+    "anthropic>=1.11.0",
 ]
 
 [dependency-groups]

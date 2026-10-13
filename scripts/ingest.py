@@ -187,7 +187,7 @@ def url_headline_extract(index, questions_and_answers):
 
     url = questions_and_answers[index][start:end]
 
-    headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234. ").strip()
+    headline = questions_and_answers[index].replace(url, "").replace("()", "").replace("[", "").replace("]", "").lstrip("1234.").strip()
     if (headline.startswith("“") and headline.endswith("”")
     or headline.startswith('"') and headline.endswith('"')
     or headline.startswith('“') and headline.endswith('"')

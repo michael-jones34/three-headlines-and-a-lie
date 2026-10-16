@@ -19,7 +19,7 @@ Before substantive work, read the repository-root `AGENTS.md` and `docs/project_
 
 - The application must work as a statically exported Next.js site hosted on Vercel.
 - All runtime game functionality must execute in the browser. Do not introduce backend services, API routes, server-side inference or external API dependencies.
-- Load quiz data from `public/data/quizzes.json`. Keep model evaluation results in a separate frontend-owned data file.
+- Load quiz data from `public/data/app_quizzes.json`. Keep model evaluation results in a separate frontend-owned data file.
 - Do not depend on the repository-root `data/` or `models/` directories at runtime.
 - Preserve the original ordering of headline options. Shuffle quiz selection between games without replacement within each game.
 - Keep fixed model evaluation results separate from player game state. Do not represent fixed evaluation results as live predictions.

@@ -1,0 +1,14 @@
+{
+  "Random baseline": 0.2455,
+  "TF-IDF + Logistic Regression": 0.4328,
+  "MiniLM embeddings + Logistic Regression": 0.4776,
+  "MiniLM embeddings + Multilayer Perceptron": 0.4627,
+  "DistilBERT headline-level classifier": 0.4627,
+  "DistilBERT quiz-level concatenated classifier": 0.2836,
+  "DistilBERT quiz-level shared scorer": 0.4925,
+  "Llama 3.2 3B + QLoRA": 0.5672,
+  "Claude Haiku 4.5": 0.597,
+  "GPT-5 nano": 0.403,
+  "Claude Fable 5.1": 0.8806,
+  "GPT-6 Astra": 0.8806
+}

@@ -72,8 +72,8 @@ The project aims to investigate how increasing model sophistication affects perf
 ## 6. Application
 
 ### Core MVP
-- App implemented in Gradio (or similar lightweight frontend application)
-- Introductory screen for user to select number of rounds
+- App implemented using Next.js with TypeScript and the App Router
+- Introductory screen briefs user, they must answer at least 10 questions and as many as they want to beyond that up the maximum available
 - User presented with set of four headlines and they choose which one they think is fake
 - Colour coded feedback depending on correct or incorrect choice
 - At end of game, user given score and compared against ML models' performance

@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import modelResults from "../data/model_results.json";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 import {
   calculateCorrectCount,
   calculateRank,
@@ -108,6 +111,118 @@ export default function Game() {
   const [answerHistory, setAnswerHistory] = useState<AnswerRecord[]>([]);
   const [showModels, setShowModels] = useState(false);
 
+  const [fadeState, setFadeState] = useState<"in" | "out">("in");
+  const [questionFadeState, setQuestionFadeState] = useState<"in" | "out">("in");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const isTransitioningRef = useRef(false);
+  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const postSwapTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const questionContainerRef = useRef<HTMLDivElement>(null);
+  const questionInnerRef = useRef<HTMLDivElement>(null);
+  const isPendingHeightResizeRef = useRef(false);
+  const questionFadeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const questionHeightRafRef = useRef<number | null>(null);
+  const questionCleanupTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  function resetQuestionContainerStyles() {
+    if (questionContainerRef.current) {
+      questionContainerRef.current.style.height = "";
+      questionContainerRef.current.style.overflow = "";
+      questionContainerRef.current.style.transition = "";
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      if (postSwapTimerRef.current) clearTimeout(postSwapTimerRef.current);
+      if (cleanupTimerRef.current) clearTimeout(cleanupTimerRef.current);
+      if (questionFadeTimerRef.current) clearTimeout(questionFadeTimerRef.current);
+      if (questionHeightRafRef.current) cancelAnimationFrame(questionHeightRafRef.current);
+      if (questionCleanupTimerRef.current) clearTimeout(questionCleanupTimerRef.current);
+      resetQuestionContainerStyles();
+    };
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!isPendingHeightResizeRef.current) {
+      return;
+    }
+    isPendingHeightResizeRef.current = false;
+
+    if (!questionContainerRef.current || !questionInnerRef.current) {
+      resetQuestionContainerStyles();
+      isTransitioningRef.current = false;
+      setIsTransitioning(false);
+      return;
+    }
+
+    const targetHeight = questionInnerRef.current.offsetHeight;
+
+    questionHeightRafRef.current = requestAnimationFrame(() => {
+      if (!questionContainerRef.current) {
+        resetQuestionContainerStyles();
+        isTransitioningRef.current = false;
+        setIsTransitioning(false);
+        return;
+      }
+
+      questionContainerRef.current.style.transition = "height 220ms ease-out";
+      questionContainerRef.current.style.height = `${targetHeight}px`;
+
+      questionCleanupTimerRef.current = setTimeout(() => {
+        resetQuestionContainerStyles();
+        isTransitioningRef.current = false;
+        setIsTransitioning(false);
+      }, 220);
+    });
+  }, [currentIndex]);
+
+  function navigateWithTransition(action: () => void) {
+    if (isTransitioningRef.current) {
+      return;
+    }
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    if (questionFadeTimerRef.current) clearTimeout(questionFadeTimerRef.current);
+    if (questionHeightRafRef.current) cancelAnimationFrame(questionHeightRafRef.current);
+    if (questionCleanupTimerRef.current) clearTimeout(questionCleanupTimerRef.current);
+    resetQuestionContainerStyles();
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      action();
+      window.scrollTo(0, 0);
+      cleanupTimerRef.current = setTimeout(() => {
+        isTransitioningRef.current = false;
+        setIsTransitioning(false);
+      }, 50);
+      return;
+    }
+
+    setFadeState("out");
+
+    transitionTimerRef.current = setTimeout(() => {
+      action();
+      window.scrollTo(0, 0);
+
+      postSwapTimerRef.current = setTimeout(() => {
+        setFadeState("in");
+
+        cleanupTimerRef.current = setTimeout(() => {
+          isTransitioningRef.current = false;
+          setIsTransitioning(false);
+        }, 180);
+      }, 20);
+    }, 140);
+  }
+
   // Load the static quiz data from web/public/data/.
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +264,8 @@ export default function Game() {
   }, []);
 
   function startGame() {
+    resetQuestionContainerStyles();
+    setQuestionFadeState("in");
     setGameQuizzes(shuffleQuizzes(quizData));
     setCurrentIndex(0);
     setSelectedAnswer(null);
@@ -174,28 +291,57 @@ export default function Game() {
     ]);
   }
 
-  function nextQuestion() {
-    if (selectedAnswer === null) {
+  function advanceToNextQuestion() {
+    if (isTransitioningRef.current || selectedAnswer === null) {
+      return;
+    }
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      setCurrentIndex((index) => index + 1);
+      setSelectedAnswer(null);
+      resetQuestionContainerStyles();
+      isTransitioningRef.current = false;
+      setIsTransitioning(false);
       return;
     }
 
-    if (currentIndex + 1 >= gameQuizzes.length) {
-      setScreen("results");
-      return;
+    if (questionContainerRef.current) {
+      const currentHeight = questionContainerRef.current.offsetHeight;
+      questionContainerRef.current.style.height = `${currentHeight}px`;
+      questionContainerRef.current.style.overflow = "hidden";
+      questionContainerRef.current.style.transition = "none";
     }
 
-    setCurrentIndex((index) => index + 1);
-    setSelectedAnswer(null);
+    setQuestionFadeState("out");
+
+    questionFadeTimerRef.current = setTimeout(() => {
+      isPendingHeightResizeRef.current = true;
+      setCurrentIndex((index) => index + 1);
+      setSelectedAnswer(null);
+      setQuestionFadeState("in");
+    }, 70);
   }
 
   const correctCount = calculateCorrectCount(answerHistory);
   const accuracy =
     answerHistory.length > 0 ? correctCount / answerHistory.length : 0;
 
+  const cardClassName = `mx-auto max-w-3xl rounded-2xl border border-[#E5DFD5] bg-white p-6 shadow-sm sm:p-8 transition-opacity motion-reduce:transition-none ${
+    fadeState === "out"
+      ? "opacity-0 duration-[140ms] ease-in"
+      : "opacity-100 duration-[180ms] ease-out"
+  }`;
+
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8">
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[#E5DFD5] bg-white p-8">
           <p>Loading quizzes…</p>
         </div>
       </main>
@@ -204,11 +350,11 @@ export default function Game() {
 
   if (loadError) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8">
-          <h1 className="text-2xl font-bold">Unable to load the game</h1>
-          <p className="mt-3 text-slate-700">{loadError}</p>
-          <p className="mt-2 text-sm text-slate-500">
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[#E5DFD5] bg-white p-8">
+          <h1 className="font-serif text-2xl font-bold">Unable to load the game</h1>
+          <p className="mt-3 text-[#18283D]/80">{loadError}</p>
+          <p className="mt-2 text-sm text-[#18283D]/60">
             Check that app_quizzes.json is in web/public/data/.
           </p>
         </div>
@@ -218,21 +364,22 @@ export default function Game() {
 
   if (showModels) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className={cardClassName}>
           <button
             type="button"
-            onClick={() => setShowModels(false)}
-            className="text-sm font-medium text-blue-700 underline underline-offset-2"
+            disabled={isTransitioning}
+            onClick={() => navigateWithTransition(() => setShowModels(false))}
+            className="text-sm font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
           >
             ← Back to scores
           </button>
 
-          <h1 className="mt-6 text-3xl font-bold tracking-tight">
+          <h1 className="mt-6 font-serif text-3xl font-bold tracking-tight">
             What are these models?
           </h1>
 
-          <p className="mt-4 text-slate-600">
+          <p className="mt-4 leading-relaxed text-[#18283D]/80">
             These models were evaluated on the task of identifying which of
             four news headlines is fabricated. They use different approaches,
             from traditional machine learning to large language models. All 
@@ -244,13 +391,13 @@ export default function Game() {
             {MODEL_EXPLANATIONS.map((model) => (
               <section
                 key={model.name}
-                className="border-b border-slate-200 pb-6 last:border-b-0"
+                className="border-b border-[#E5DFD5] pb-6 last:border-b-0"
               >
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#C6534B]">
                 {model.category}
               </p>
-              <h2 className="mt-1 text-xl font-semibold">{model.name}</h2>
-              <p className="mt-2 leading-7 text-slate-700">
+              <h2 className="mt-1 font-serif text-xl font-semibold text-[#18283D]">{model.name}</h2>
+              <p className="mt-2 leading-7 text-[#18283D]/80">
                 {model.description}
               </p>
               </section>
@@ -259,8 +406,9 @@ export default function Game() {
 
           <button
             type="button"
-            onClick={() => setShowModels(false)}
-            className="mt-4 text-sm font-medium text-blue-700 underline underline-offset-2"
+            disabled={isTransitioning}
+            onClick={() => navigateWithTransition(() => setShowModels(false))}
+            className="mt-4 text-sm font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
           >
             ← Back to scores
           </button>
@@ -271,42 +419,42 @@ export default function Game() {
 
   if (screen === "start") {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h1 className="text-3xl font-bold tracking-tight">
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className={cardClassName}>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">
             Three Headlines and a Lie
           </h1>
 
-          <p className="mt-4 text-lg text-slate-700">
+          <p className="mt-4 text-lg text-[#18283D]/90">
             Four headlines. Three are real, and one is fabricated. Can you
             spot the lie?
           </p>
 
-          <p className="mt-3 text-slate-600">
+          <p className="mt-3 text-[#18283D]/70">
             There are {quizData.length} quizzes available.
           </p>
 
-          <p className="mt-3 text-slate-600">
+          <p className="mt-3 text-[#18283D]/70">
             Answer at least {MIN_QUESTIONS} questions to show your score 
             and compare against machine learning model performance.
           </p>
 
           <button
             type="button"
-            onClick={startGame}
-            disabled={quizData.length === 0}
-            className="mt-6 rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2"
+            onClick={() => navigateWithTransition(startGame)}
+            disabled={quizData.length === 0 || isTransitioning}
+            className="mt-6 rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             Start game
           </button>
 
-          <p className="mt-8 border-t border-slate-200 pt-4 text-sm text-slate-500">
+          <p className="mt-8 border-t border-[#E5DFD5] pt-4 text-sm text-[#18283D]/60">
             Source data and headline content credited to{" "}
             <a
               href="https://www.morningbrew.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-blue-700 underline underline-offset-2"
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B]"
             >
               Morning Brew
             </a>.
@@ -329,32 +477,32 @@ export default function Game() {
     const rank = calculateRank(accuracy, BENCHMARK_RESULTS);
 
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h1 className="text-3xl font-bold tracking-tight">Your results</h1>
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className={cardClassName}>
+          <h1 className="font-serif text-3xl font-bold tracking-tight">Your results</h1>
 
-          <div className="mt-6 rounded-xl bg-slate-50 p-5">
-            <p className="text-sm font-medium text-slate-600">Your accuracy</p>
-            <p className="mt-1 text-4xl font-bold">
+          <div className="mt-6 rounded-xl border border-[#E5DFD5] bg-[#F6F1E7] p-5">
+            <p className="text-sm font-medium uppercase tracking-wide text-[#18283D]/70">Your accuracy</p>
+            <p className="mt-1 font-serif text-5xl font-bold text-[#18283D]">
               {formatPercent(accuracy)}
             </p>
-            <p className="mt-2 text-slate-700">
+            <p className="mt-2 text-[#18283D]/80">
               {correctCount} correct out of {answerHistory.length} questions
               answered.
             </p>
           </div>
 
-          <h2 className="mt-8 text-xl font-semibold">Model comparison</h2>
+          <h2 className="mt-8 font-serif text-xl font-semibold">Model comparison</h2>
 
-          <p className="mt-2 text-slate-700">
+          <p className="mt-2 text-[#18283D]/80">
             Your score would rank <strong>#{rank}</strong> out of{" "}
             {rankedResults.length} entries if compared directly with these
             benchmark scores achieved by different machine learning models.
           </p>
 
-          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-[#E5DFD5]">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-100 text-slate-700">
+              <thead className="bg-[#ECE5D8] font-medium text-[#18283D]">
                 <tr>
                   <th scope="col" className="px-4 py-3">
                     Entry
@@ -370,8 +518,8 @@ export default function Game() {
                     key={entry.name}
                     className={
                       entry.isPlayer
-                        ? "bg-sky-50 font-semibold"
-                        : "border-t border-slate-100"
+                        ? "bg-[#E2D8C3] font-semibold text-[#18283D]"
+                        : "border-t border-[#E5DFD5] text-[#18283D]/90"
                     }
                   >
                     <td className="px-4 py-3">{entry.name}</td>
@@ -384,7 +532,7 @@ export default function Game() {
             </table>
           </div>
 
-          <p className="mt-4 text-sm text-slate-600">
+          <p className="mt-4 text-sm text-[#18283D]/70">
             This comparison is indicative, not like-for-like: the benchmark
             scores were measured across the full test set, whereas your score
             is based on {answerHistory.length} randomly ordered questions.
@@ -394,8 +542,9 @@ export default function Game() {
           <p className="mt-4">
             <button
               type="button"
-              onClick={() => setShowModels(true)}
-              className="font-medium text-blue-700 underline underline-offset-2"
+              disabled={isTransitioning}
+              onClick={() => navigateWithTransition(() => setShowModels(true))}
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
             >
               What are these models?
             </button>
@@ -403,7 +552,9 @@ export default function Game() {
 
           <button
             type="button"
-            onClick={startGame}            className="mt-6 rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2"
+            disabled={isTransitioning}
+            onClick={() => navigateWithTransition(startGame)}
+            className="mt-6 rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             Play again
           </button>
@@ -416,13 +567,14 @@ export default function Game() {
 
   if (!currentQuiz) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-8">
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[#E5DFD5] bg-white p-8">
           <p>No quiz is available at this position.</p>
           <button
             type="button"
-            onClick={startGame}
-            className="mt-4 rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white"
+            disabled={isTransitioning}
+            onClick={() => navigateWithTransition(startGame)}
+            className="mt-4 rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:opacity-50"
           >
             Restart game
           </button>
@@ -432,106 +584,150 @@ export default function Game() {
   }
 
   const canFinish = answerHistory.length >= MIN_QUESTIONS;
+  const isAnswered = selectedAnswer !== null;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
-      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+      <div className={cardClassName}>
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-medium text-slate-600">
+          <p className="text-sm font-medium text-[#18283D]/70">
             Question {currentIndex + 1} of {gameQuizzes.length}
           </p>
-          <p className="text-sm font-medium text-slate-600">
+          <p className="text-sm font-medium text-[#18283D]/70">
             Score: {correctCount}/{answerHistory.length}
           </p>
         </div>
 
-        <progress
-          className="mt-3 h-2 w-full accent-slate-900"
-          value={answerHistory.length}
-          max={gameQuizzes.length}
+        <div
+          className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#EAE4D7]"
+          role="progressbar"
           aria-label="Quiz progress"
-        />
+          aria-valuenow={currentIndex + 1}
+          aria-valuemin={0}
+          aria-valuemax={gameQuizzes.length}
+        >
+          <div
+            className="h-full rounded-full bg-[#C6534B] transition-[width] duration-300 ease-out motion-reduce:transition-none"
+            style={{
+              width: `${((currentIndex + 1) / gameQuizzes.length) * 100}%`,
+            }}
+          />
+        </div>
 
-        <h1 className="mt-6 text-2xl font-bold tracking-tight">
+        <h1 className="mt-6 font-serif text-2xl font-bold tracking-tight">
           Which headline is the lie?
         </h1>
 
-        <div className="mt-5 space-y-3">
-          {currentQuiz.headlines.map((headline, index) => {
-            let optionStyle =
-              "border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50";
-
-            if (selectedAnswer !== null) {
-              if (index === currentQuiz.answer) {
-                optionStyle = "border-emerald-600 bg-emerald-50";
-              } else if (index === selectedAnswer) {
-                optionStyle = "border-rose-600 bg-rose-50";
-              } else {
-                optionStyle = "border-slate-200 bg-white opacity-70";
-              }
-            }
-
-            return (
-              <div key={`${currentQuiz._id}-${index}`}>
-                <button
-                  type="button"
-                  onClick={() => chooseAnswer(index, currentQuiz)}
-                  disabled={selectedAnswer !== null}
-                  aria-pressed={selectedAnswer === index}
-                  className={`w-full rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2 disabled:cursor-default ${optionStyle}`}
-                >
-                  <span className="mr-3 font-semibold text-slate-500">
-                    {String.fromCharCode(65 + index)}.
-                  </span>
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => <span>{children}</span>,
-                    }}
-                  >
-                    {headline.text}
-                  </ReactMarkdown>
-                </button>
-
-                {selectedAnswer !== null && (
-                  <p className="px-4 pt-2 text-sm">
-                    <a
-                      href={headline.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-blue-700 underline underline-offset-2"
-                    >
-                      {index === currentQuiz.answer ? "GIF" : "Source article"}
-                    </a>
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {selectedAnswer !== null && (
-          <section
-            aria-live="polite"
-            className="mt-6 rounded-xl border border-slate-200 p-5"
+        <div ref={questionContainerRef}>
+          <div
+            ref={questionInnerRef}
+            className={`pt-5 transition-opacity motion-reduce:transition-none ${
+              questionFadeState === "out"
+                ? "opacity-0 duration-[70ms] ease-in"
+                : "opacity-100 duration-[180ms] ease-out"
+            }`}
           >
-            <h2 className="text-lg font-semibold">
-              {selectedAnswer === currentQuiz.answer
-                ? "Correct — you spotted the lie!"
-                : "Incorrect — try the next one"}
-            </h2>
+            <div className="space-y-3">
+              {currentQuiz.headlines.map((headline, index) => {
+                let optionStyle =
+                  "border-[#E5DFD5] bg-white hover:border-[#18283D]/40 hover:bg-[#FAF7F0]";
 
-            <p className="mt-3 text-xs text-slate-500">
-              Issue date: {currentQuiz.date}
-            </p>
-          </section>
-        )}
+                if (isAnswered) {
+                  if (index === currentQuiz.answer) {
+                    optionStyle = "border-[#6B9C82] bg-[#DCEBE3] text-[#143B2A]";
+                  } else if (index === selectedAnswer) {
+                    optionStyle = "border-[#C6534B] bg-[#F7E5E3] text-[#5C1D18]";
+                  } else {
+                    optionStyle = "border-[#E5DFD5] bg-white opacity-60 text-[#18283D]/60";
+                  }
+                }
+
+                return (
+                  <div key={`${currentQuiz._id}-${index}`}>
+                    <button
+                      type="button"
+                      onClick={() => chooseAnswer(index, currentQuiz)}
+                      disabled={isAnswered || isTransitioning}
+                      aria-pressed={selectedAnswer === index}
+                      className={`w-full rounded-xl border p-4 text-left transition-all duration-200 ease-out motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 disabled:cursor-default ${optionStyle}`}
+                    >
+                      <span className="mr-3 font-sans font-semibold text-[#18283D]/60">
+                        {String.fromCharCode(65 + index)}.
+                      </span>
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => (
+                            <span className="font-serif text-base sm:text-lg font-medium leading-snug">
+                              {children}
+                            </span>
+                          ),
+                        }}
+                      >
+                        {headline.text}
+                      </ReactMarkdown>
+                    </button>
+
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                        isAnswered ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                      }`}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <p
+                          inert={!isAnswered}
+                          className={`px-4 pt-2 text-sm transition-opacity duration-300 ease-out motion-reduce:transition-none ${
+                            isAnswered ? "opacity-100" : "opacity-0"
+                          }`}
+                        >
+                          <a
+                            href={headline.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2"
+                          >
+                            {index === currentQuiz.answer ? "GIF" : "Source article"}
+                          </a>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedAnswer !== null && (
+              <section
+                aria-live="polite"
+                className={`mt-6 rounded-xl border p-5 animate-fade-in ${
+                  selectedAnswer === currentQuiz.answer
+                    ? "border-[#6B9C82] bg-[#DCEBE3] text-[#143B2A]"
+                    : "border-[#C6534B] bg-[#F7E5E3] text-[#5C1D18]"
+                }`}
+              >
+                <h2 className="font-serif text-lg font-semibold">
+                  {selectedAnswer === currentQuiz.answer
+                    ? "Correct — you spotted the lie!"
+                    : "Incorrect — try the next one"}
+                </h2>
+
+                <p className="mt-3 text-xs opacity-75">
+                  Issue date: {currentQuiz.date}
+                </p>
+              </section>
+            )}
+          </div>
+        </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={nextQuestion}
-            disabled={selectedAnswer === null}
-            className="rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2"
+            onClick={
+              currentIndex === gameQuizzes.length - 1
+                ? () => navigateWithTransition(() => setScreen("results"))
+                : advanceToNextQuestion
+            }
+            disabled={selectedAnswer === null || isTransitioning}
+            className="rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:cursor-default disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             {currentIndex === gameQuizzes.length - 1
               ? "View results"
@@ -541,8 +737,11 @@ export default function Game() {
           {canFinish && (
             <button
               type="button"
-              onClick={() => setScreen("results")}
-              className="rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-700 focus-visible:ring-offset-2"
+              onClick={() =>
+                navigateWithTransition(() => setScreen("results"))
+              }
+              disabled={isTransitioning}
+              className="rounded-xl border border-[#18283D]/30 px-5 py-3 font-semibold text-[#18283D] transition-colors duration-150 hover:bg-[#F2ECE1] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
             >
               Finish game
             </button>

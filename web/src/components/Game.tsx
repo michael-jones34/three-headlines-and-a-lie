@@ -287,8 +287,8 @@ export default function Game() {
           </p>
 
           <p className="mt-3 text-slate-600">
-            Answer at least {MIN_QUESTIONS} questions to finish, or keep going
-            and attempt the entire set.
+            Answer at least {MIN_QUESTIONS} questions to show your score 
+            and compare against machine learning model performance.
           </p>
 
           <button

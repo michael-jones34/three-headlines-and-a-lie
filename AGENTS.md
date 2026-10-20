@@ -64,6 +64,17 @@ Inspect the actual repository before making changes. Preserve existing work, par
 - For substantial, multi-step tasks, create or update a task document under docs/tasks/, maintain its checklist and decision log, and record validation results before closing it.
 - **Do not edit `README.md` unless explicitly instructed.** README updates will be a separate, deliberate task after the application is implemented and validated.
 
+### Verification and token efficiency
+
+- Keep implementation focused and avoid unnecessary tool calls or repeated inspections.
+- For styling-only changes that do not affect application logic, do not routinely run `npm run lint` or `npm run build`. Inspect the diff for obvious problems and report that automated checks were skipped.
+- For changes to application logic, state management, configuration, dependencies, or build-related code, run the relevant checks when practical.
+- Always run checks when recovering from an interrupted or potentially incomplete edit, or when there is concrete evidence of a syntax or build problem.
+- Do not rerun checks that have already passed unless subsequent edits could have invalidated them.
+- Do not spend time fixing unrelated pre-existing warnings or issues.
+- Never claim a check passed unless it was actually run and passed.
+- At the end, summarise the changes, checks performed or skipped, and anything that still needs manual testing.
+
 ## Coding Standards
 
 1. Use current stable versions of libraries and idiomatic approaches, checking the relevant documentation where necessary. Prefer existing, compatible dependencies over unnecessary upgrades.

@@ -27,11 +27,11 @@ The migration creates:
 2. Retrieve your project credentials from Supabase:
    - Go to **Project Settings** > **API**.
    - Copy the **Project URL** into `NEXT_PUBLIC_SUPABASE_URL`.
-   - Copy the **anon / public** key into `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+   - Copy the **publishable** key into `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 3. Verify that `web/.env.local` contains:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-public-key>
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your-publishable-key>
    ```
    *Note: Never paste the secret `service_role` key into client configuration.*
 
@@ -47,7 +47,7 @@ When deploying to Vercel:
 2. Select **Environment Variables**.
 3. Add the two public environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase Project URL.
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase Anon/Public API Key.
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Your Supabase Publishable API Key.
 4. Set the environment to **Production**, **Preview**, and **Development**.
 5. Redeploy the project so the static export bundle embeds the public credentials.
 

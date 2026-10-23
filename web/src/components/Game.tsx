@@ -17,9 +17,11 @@ import {
 } from "../lib/game";
 import {
   fetchHumanStats,
+  fetchLeaderboard,
   submitAttempt,
   validateDisplayName,
   type HumanStats,
+  type LeaderboardEntry,
   type SubmitResult,
 } from "../lib/scoring";
 import ReactMarkdown from "react-markdown";
@@ -142,6 +144,16 @@ export default function Game() {
   // Aggregate human stats fetched from Supabase on the results screen.
   const [humanStats, setHumanStats] = useState<HumanStats | null>(null);
   const [humanStatsFetched, setHumanStatsFetched] = useState(false);
+
+  // Community leaderboard state.
+  const LEADERBOARD_PAGE_SIZE = 50;
+  const [leaderboardPage, setLeaderboardPage] = useState(1);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardHasNext, setLeaderboardHasNext] = useState(false);
+  const [leaderboardStatus, setLeaderboardStatus] = useState<
+    "idle" | "loading" | "ok" | "empty" | "error" | "unconfigured"
+  >("idle");
+  const leaderboardFetchedPagesRef = useRef<Set<number>>(new Set());
 
   const [fadeState, setFadeState] = useState<"in" | "out">("in");
   const [questionFadeState, setQuestionFadeState] = useState<"in" | "out">("in");
@@ -316,6 +328,67 @@ export default function Game() {
     };
   }, [screen, humanStatsFetched]);
 
+  // Fetch the community leaderboard page when the results screen is shown and
+  // the page changes. After fetching the full page, a lightweight probe (1 row,
+  // page N+1) determines whether a next page exists. This avoids the need to
+  // request page_size+1 rows — which the RPC caps at 50 anyway.
+  useEffect(() => {
+    if (screen !== "results") return;
+    if (leaderboardFetchedPagesRef.current.has(leaderboardPage)) return;
+
+    let cancelled = false;
+
+    async function loadLeaderboard() {
+      setLeaderboardStatus("loading");
+      const result = await fetchLeaderboard({
+        pageNumber: leaderboardPage,
+        pageSize: LEADERBOARD_PAGE_SIZE,
+      });
+      if (cancelled) return;
+
+      if (!result.ok) {
+        setLeaderboardStatus(result.reason === "unconfigured" ? "unconfigured" : "error");
+        return;
+      }
+
+      leaderboardFetchedPagesRef.current.add(leaderboardPage);
+      const displayEntries = result.entries;
+      setLeaderboardEntries(displayEntries);
+
+      if (displayEntries.length === 0) {
+        setLeaderboardHasNext(false);
+        setLeaderboardStatus("empty");
+        return;
+      }
+
+      setLeaderboardStatus("ok");
+
+      // Only probe for a next page when this page returned a full set of
+      // results. If fewer than page_size rows were returned there cannot be a
+      // next page, so skip the extra call.
+      if (displayEntries.length < LEADERBOARD_PAGE_SIZE) {
+        setLeaderboardHasNext(false);
+        return;
+      }
+
+      // Probe: fetch a single row from the next page to determine whether it
+      // exists. page_size: 1 is within the RPC's accepted range (1–50).
+      const probe = await fetchLeaderboard({
+        pageNumber: leaderboardPage + 1,
+        pageSize: 1,
+      });
+      if (cancelled) return;
+
+      setLeaderboardHasNext(probe.ok && probe.entries.length > 0);
+    }
+
+    void loadLeaderboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [screen, leaderboardPage]);
+
   function startGame() {
     resetQuestionContainerStyles();
     setQuestionFadeState("in");
@@ -332,6 +405,11 @@ export default function Game() {
     setSubmitStatus("idle");
     setHumanStats(null);
     setHumanStatsFetched(false);
+    setLeaderboardPage(1);
+    setLeaderboardEntries([]);
+    setLeaderboardHasNext(false);
+    setLeaderboardStatus("idle");
+    leaderboardFetchedPagesRef.current = new Set();
     isSubmittingRef.current = false;
     setScreen("playing");
   }
@@ -773,14 +851,30 @@ export default function Game() {
   }
 
   if (screen === "results") {
-    const rankedResults = [
+    const humanAccuracy = humanStats?.microAccuracy ?? null;
+
+    const rankedResults: {
+      name: string;
+      accuracy: number | null;
+      isPlayer?: boolean;
+      isHumanAverage?: boolean;
+    }[] = [
       { name: "You", accuracy, isPlayer: true },
       ...Object.entries(BENCHMARK_RESULTS).map(([name, modelAccuracy]) => ({
         name,
         accuracy: modelAccuracy,
         isPlayer: false,
       })),
-    ].sort((a, b) => b.accuracy - a.accuracy);
+      {
+        name: "Human average",
+        accuracy: humanAccuracy,
+        isHumanAverage: true,
+      },
+    ].sort((a, b) => {
+      if (a.accuracy === null) return 1;
+      if (b.accuracy === null) return -1;
+      return b.accuracy - a.accuracy;
+    });
 
     const rank = calculateRank(accuracy, BENCHMARK_RESULTS);
 
@@ -822,7 +916,7 @@ export default function Game() {
 
           <p className="mt-2 text-[#18283D]/80">
             Your score would rank <strong>#{rank}</strong> out of{" "}
-            {rankedResults.length} entries if compared directly with these
+            {Object.keys(BENCHMARK_RESULTS).length + 1} entries if compared directly with these
             benchmark scores achieved by different machine learning models.
           </p>
 
@@ -845,12 +939,16 @@ export default function Game() {
                     className={
                       entry.isPlayer
                         ? "bg-[#E2D8C3] font-semibold text-[#18283D]"
-                        : "border-t border-[#E5DFD5] text-[#18283D]/90"
+                        : entry.isHumanAverage
+                          ? "border-t border-[#E5DFD5] bg-[#F6F1E7]/60 italic text-[#18283D]/90"
+                          : "border-t border-[#E5DFD5] text-[#18283D]/90"
                     }
                   >
                     <td className="px-4 py-3">{entry.name}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      {formatPercent(entry.accuracy)}
+                      {entry.accuracy !== null
+                        ? formatPercent(entry.accuracy)
+                        : "Unavailable"}
                     </td>
                   </tr>
                 ))}
@@ -865,6 +963,11 @@ export default function Game() {
             Shorter games are more sensitive to which questions you encounter.
           </p>
 
+          <p className="mt-2 text-sm text-[#18283D]/70">
+            Human average and model results are based on different numbers of attempts
+            and are not directly comparable.
+          </p>
+
           <p className="mt-4">
             <button
               type="button"
@@ -876,11 +979,107 @@ export default function Game() {
             </button>
           </p>
 
+          {leaderboardStatus !== "unconfigured" && leaderboardStatus !== "idle" && (
+            <section className="mt-10">
+              <h2 className="font-serif text-xl font-semibold">Community leaderboard</h2>
+              <p className="mt-1 text-sm text-[#18283D]/70">
+                Approved, opted-in submissions only. Ranked by accuracy, then
+                correct count.
+              </p>
+
+              {leaderboardStatus === "loading" && (
+                <p className="mt-4 text-sm text-[#18283D]/60">Loading leaderboard&hellip;</p>
+              )}
+
+              {leaderboardStatus === "error" && (
+                <p className="mt-4 text-sm text-[#C6534B]">
+                  The leaderboard could not be loaded. Check your connection and try again.
+                </p>
+              )}
+
+              {leaderboardStatus === "empty" && (
+                <p className="mt-4 text-sm text-[#18283D]/60">
+                  No approved entries yet. Be the first to submit a score.
+                </p>
+              )}
+
+              {leaderboardStatus === "ok" && (
+                <>
+                  <div className="mt-4 overflow-x-auto rounded-xl border border-[#E5DFD5]">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-[#ECE5D8] font-medium text-[#18283D]">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-right w-12">
+                            Rank
+                          </th>
+                          <th scope="col" className="px-4 py-3">
+                            Initials
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-right">
+                            Accuracy
+                          </th>
+                          <th scope="col" className="px-4 py-3 text-right">
+                            Score
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaderboardEntries.map((entry, index) => {
+                          const globalRank =
+                            (leaderboardPage - 1) * LEADERBOARD_PAGE_SIZE + index + 1;
+                          return (
+                            <tr
+                              key={`${entry.displayName}-${globalRank}`}
+                              className="border-t border-[#E5DFD5] text-[#18283D]/90"
+                            >
+                              <td className="px-4 py-3 text-right tabular-nums text-[#18283D]/60">
+                                {globalRank}
+                              </td>
+                              <td className="px-4 py-3 font-medium">{entry.displayName}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">
+                                {formatPercent(entry.accuracy)}
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-[#18283D]/70">
+                                {entry.correctCount}/{entry.questionsAnswered}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {(leaderboardPage > 1 || leaderboardHasNext) && (
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={leaderboardPage <= 1}
+                        onClick={() => setLeaderboardPage((p) => p - 1)}
+                        className="rounded-lg border border-[#18283D]/30 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-[#F2ECE1] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-[#18283D]/60">Page {leaderboardPage}</span>
+                      <button
+                        type="button"
+                        disabled={!leaderboardHasNext}
+                        onClick={() => setLeaderboardPage((p) => p + 1)}
+                        className="rounded-lg border border-[#18283D]/30 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-[#F2ECE1] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
           <button
             type="button"
             disabled={isTransitioning}
             onClick={() => navigateWithTransition(startGame)}
-            className="mt-6 rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
+            className="mt-8 rounded-xl bg-[#18283D] px-5 py-3 font-semibold text-[#FAF7F0] transition-colors duration-150 hover:bg-[#283C54] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             Play again
           </button>

@@ -1,9 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   validateDisplayName,
   submitAttempt,
   fetchHumanStats,
+  fetchLeaderboard,
+  type LeaderboardEntry,
 } from "../scoring";
+
+let mockSupabaseClient: {
+  rpc: ReturnType<typeof vi.fn>;
+  from: ReturnType<typeof vi.fn>;
+} | null = null;
+
+vi.mock("../supabase", () => ({
+  get supabase() {
+    return mockSupabaseClient;
+  },
+}));
 
 describe("validateDisplayName", () => {
   it("accepts a single non-whitespace character", () => {
@@ -37,6 +50,10 @@ describe("validateDisplayName", () => {
 });
 
 describe("submitAttempt validation", () => {
+  beforeEach(() => {
+    mockSupabaseClient = null;
+  });
+
   it("rejects questions answered below 10", async () => {
     const res = await submitAttempt({
       attemptId: "test-id",
@@ -127,8 +144,130 @@ describe("submitAttempt validation", () => {
 });
 
 describe("fetchHumanStats fallback", () => {
+  beforeEach(() => {
+    mockSupabaseClient = null;
+  });
+
   it("returns null when Supabase is unconfigured", async () => {
     const stats = await fetchHumanStats();
     expect(stats).toBeNull();
+  });
+});
+
+describe("fetchLeaderboard", () => {
+  let mockRpc: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockRpc = vi.fn();
+    mockSupabaseClient = {
+      rpc: mockRpc,
+      from: vi.fn(),
+    };
+  });
+
+  it("returns unconfigured when Supabase client is missing", async () => {
+    mockSupabaseClient = null;
+    const res = await fetchLeaderboard();
+    expect(res).toEqual({ ok: false, reason: "unconfigured" });
+  });
+
+  it("defaults to page 1 and 50 entries per page when called without arguments", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    const res = await fetchLeaderboard();
+
+    expect(mockRpc).toHaveBeenCalledWith("get_leaderboard", {
+      page_number: 1,
+      page_size: 50,
+    });
+    expect(res).toEqual({ ok: true, entries: [] });
+  });
+
+  it("passes custom positional pagination arguments", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    await fetchLeaderboard(2, 25);
+
+    expect(mockRpc).toHaveBeenCalledWith("get_leaderboard", {
+      page_number: 2,
+      page_size: 25,
+    });
+  });
+
+  it("passes custom object pagination arguments", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    await fetchLeaderboard({ pageNumber: 3, pageSize: 10 });
+
+    expect(mockRpc).toHaveBeenCalledWith("get_leaderboard", {
+      page_number: 3,
+      page_size: 10,
+    });
+  });
+
+  it("maps returned database rows to typed LeaderboardEntry array with numeric accuracy", async () => {
+    const mockDbRows = [
+      {
+        display_name: "ALX",
+        accuracy: "0.90000", // database numeric returned as string
+        correct_count: 9,
+        questions_answered: 10,
+      },
+      {
+        display_name: "BOB",
+        accuracy: 0.8, // database numeric returned as number
+        correct_count: 8,
+        questions_answered: 10,
+      },
+    ];
+
+    mockRpc.mockResolvedValue({ data: mockDbRows, error: null });
+
+    const res = await fetchLeaderboard();
+
+    expect(res).toEqual({
+      ok: true,
+      entries: [
+        {
+          displayName: "ALX",
+          accuracy: 0.9,
+          correctCount: 9,
+          questionsAnswered: 10,
+        },
+        {
+          displayName: "BOB",
+          accuracy: 0.8,
+          correctCount: 8,
+          questionsAnswered: 10,
+        },
+      ] satisfies LeaderboardEntry[],
+    });
+  });
+
+  it("distinguishes successful empty results from errors", async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+
+    const res = await fetchLeaderboard();
+
+    expect(res).toEqual({ ok: true, entries: [] });
+  });
+
+  it("returns error result when the RPC call fails", async () => {
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: "Failed to execute RPC", code: "PGRST000" },
+    });
+
+    const res = await fetchLeaderboard();
+
+    expect(res).toEqual({ ok: false, reason: "error" });
+  });
+
+  it("returns error result when data is null without explicit error", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: null });
+
+    const res = await fetchLeaderboard();
+
+    expect(res).toEqual({ ok: false, reason: "error" });
   });
 });

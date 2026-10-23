@@ -111,6 +111,77 @@ export interface HumanStats {
   microAccuracy: number;
 }
 
+export interface LeaderboardEntry {
+  displayName: string;
+  accuracy: number;
+  correctCount: number;
+  questionsAnswered: number;
+}
+
+export type FetchLeaderboardResult =
+  | { ok: true; entries: LeaderboardEntry[] }
+  | { ok: false; reason: "unconfigured" | "error" };
+
+export interface FetchLeaderboardParams {
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+/**
+ * Fetch approved, opted-in leaderboard entries from the get_leaderboard RPC.
+ * Defaults to page 1 and 50 entries per page.
+ *
+ * - Returns { ok: true, entries } on success (entries may be empty []).
+ * - Returns { ok: false, reason: "unconfigured" } when Supabase is not configured.
+ * - Returns { ok: false, reason: "error" } if the RPC fails.
+ */
+export async function fetchLeaderboard(
+  pageNumberOrParams?: number | FetchLeaderboardParams,
+  pageSizeParam: number = 50,
+): Promise<FetchLeaderboardResult> {
+  if (!supabase) {
+    return { ok: false, reason: "unconfigured" };
+  }
+
+  let pageNumber = 1;
+  let pageSize = 50;
+
+  if (typeof pageNumberOrParams === "number") {
+    pageNumber = pageNumberOrParams;
+    pageSize = pageSizeParam;
+  } else if (pageNumberOrParams && typeof pageNumberOrParams === "object") {
+    pageNumber = pageNumberOrParams.pageNumber ?? 1;
+    pageSize = pageNumberOrParams.pageSize ?? 50;
+  }
+
+  const { data, error } = await supabase.rpc("get_leaderboard", {
+    page_number: pageNumber,
+    page_size: pageSize,
+  });
+
+  if (error || !data) {
+    return { ok: false, reason: "error" };
+  }
+
+  interface RawLeaderboardRow {
+    display_name: string;
+    accuracy: number | string;
+    correct_count: number;
+    questions_answered: number;
+  }
+
+  const entries: LeaderboardEntry[] = (data as RawLeaderboardRow[]).map(
+    (row) => ({
+      displayName: row.display_name,
+      accuracy: Number(row.accuracy),
+      correctCount: row.correct_count,
+      questionsAnswered: row.questions_answered,
+    }),
+  );
+
+  return { ok: true, entries };
+}
+
 /**
  * Fetch aggregate statistics from the get_human_stats RPC.
  *

@@ -105,6 +105,14 @@ export function calculateCorrectCount(answers: AnswerRecord[]): number {
   return answers.filter((answer) => answer.correct).length;
 }
 
+/**
+ * Generate a unique identifier for a new game attempt.
+ * Uses the Web Crypto API, available in all modern browsers and in Node >= 15.
+ */
+export function generateAttemptId(): string {
+  return crypto.randomUUID();
+}
+
 /** Competition ranking: one plus the number of strictly higher scores. */
 export function calculateRank(
   accuracy: number,

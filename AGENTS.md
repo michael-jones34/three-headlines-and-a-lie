@@ -34,7 +34,7 @@ This is a deliberately lightweight, frontend-only MVP (all backend ingestion scr
 - **Styling:** Tailwind CSS, unless the existing frontend implementation provides a compelling reason to use an alternative.
 - **Hosting:** Vercel, using Next.js static export (`output: 'export'`).
 - **Frontend location:** `web/`, with its own Node.js dependencies and configuration.
-- **Quiz data:** `web/public/data/quizzes.json`, containing the curated 67-question application dataset.
+- **Quiz data:** `web/public/data/app_quizzes.json`, containing the curated 67-question application dataset.
 - **Model results:** A separate frontend-owned file, such as `web/src/data/model-results.json`.
 - **Python environment:** Continue using `uv` for the existing Python project. Do not merge the Python and Node.js environments.
 - **Testing and CI:** Include proportionate automated tests, linting, TypeScript checks and production-build validation. Add a browser end-to-end test and GitHub Actions CI where practical.
@@ -47,7 +47,7 @@ The existing repository contains the completed data acquisition, data preparatio
 
 The root Python project includes its own environment configuration, scripts, notebooks and local datasets/model artefacts. The root `.gitignore` excludes the local `data/` and `models/` directories.
 
-The curated application dataset has been created separately under `web/public/data/quizzes.json`. The quiz records contain IDs, dates, four headline objects with text and URLs, and a zero-based answer index.
+The curated application dataset has been created separately under `web/public/data/app_quizzes.json`. The quiz records contain IDs, dates, four headline objects with text and URLs, and a zero-based answer index.
 
 The established ordering of the four headlines within each quiz must be preserved. Shuffle the order of quizzes between games, not the individual headline options.
 

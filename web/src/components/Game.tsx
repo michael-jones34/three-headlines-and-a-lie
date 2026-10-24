@@ -25,6 +25,7 @@ import {
   type SubmitResult,
 } from "../lib/scoring";
 import ReactMarkdown from "react-markdown";
+import CommunityLeaderboard from "./CommunityLeaderboard";
 
 const BENCHMARK_RESULTS = modelResults as Record<string, number>;
 
@@ -121,7 +122,7 @@ export default function Game() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [screen, setScreen] = useState<"start" | "playing" | "submit" | "results">(
+  const [screen, setScreen] = useState<"start" | "playing" | "submit" | "results" | "leaderboard">(
     "start",
   );
   const [gameQuizzes, setGameQuizzes] = useState<Quiz[]>([]);
@@ -333,7 +334,7 @@ export default function Game() {
   // page N+1) determines whether a next page exists. This avoids the need to
   // request page_size+1 rows — which the RPC caps at 50 anyway.
   useEffect(() => {
-    if (screen !== "results") return;
+    if (screen !== "results" && screen !== "leaderboard") return;
     if (leaderboardFetchedPagesRef.current.has(leaderboardPage)) return;
 
     let cancelled = false;
@@ -606,6 +607,40 @@ export default function Game() {
     );
   }
 
+  if (screen === "leaderboard") {
+    return (
+      <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
+        <div className={cardClassName}>
+          <button
+            type="button"
+            disabled={isTransitioning}
+            onClick={() => navigateWithTransition(() => setScreen("start"))}
+            className="text-sm font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
+          >
+            ← Back to start
+          </button>
+
+          <h1 className="mt-6 font-serif text-3xl font-bold tracking-tight">
+            Community leaderboard
+          </h1>
+
+          <div className="mt-6">
+            <CommunityLeaderboard
+              status={leaderboardStatus}
+              entries={leaderboardEntries}
+              page={leaderboardPage}
+              hasNext={leaderboardHasNext}
+              pageSize={LEADERBOARD_PAGE_SIZE}
+              onPrevious={() => setLeaderboardPage((p) => p - 1)}
+              onNext={() => setLeaderboardPage((p) => p + 1)}
+            />
+          </div>
+
+        </div>
+      </main>
+    );
+  }
+
   if (screen === "start") {
     return (
       <main className="min-h-screen bg-[#FAF7F0] px-4 py-10 text-[#18283D]">
@@ -636,6 +671,19 @@ export default function Game() {
           >
             Start game
           </button>
+
+          <p className="mt-4">
+            <button
+              type="button"
+              disabled={isTransitioning}
+              onClick={() =>
+                navigateWithTransition(() => setScreen("leaderboard"))
+              }
+              className="text-sm font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
+            >
+              View community leaderboard
+            </button>
+          </p>
 
           <p className="mt-8 border-t border-[#E5DFD5] pt-4 text-sm text-[#18283D]/60">
             Source data and headline content credited to{" "}
@@ -894,24 +942,6 @@ export default function Game() {
             </p>
           </div>
 
-          {humanStats && (
-            <div className="mt-5 rounded-xl border border-[#E5DFD5] bg-[#F6F1E7] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#18283D]/70">
-                Aggregate human accuracy
-              </p>
-              <p className="mt-1 font-serif text-2xl font-bold text-[#18283D]">
-                {formatPercent(humanStats.microAccuracy)}
-              </p>
-              <p className="mt-1 text-sm text-[#18283D]/70">
-                Across {humanStats.totalAnswers.toLocaleString()} answers from{" "}
-                {humanStats.approvedAttempts.toLocaleString()} approved{" "}
-                {humanStats.approvedAttempts === 1 ? "attempt" : "attempts"}.
-                This is a micro-average across contributed, reviewed scores and is
-                not a definitive human benchmark.
-              </p>
-            </div>
-          )}
-
           <h2 className="mt-8 font-serif text-xl font-semibold">Model comparison</h2>
 
           <p className="mt-2 text-[#18283D]/80">
@@ -940,7 +970,7 @@ export default function Game() {
                       entry.isPlayer
                         ? "bg-[#E2D8C3] font-semibold text-[#18283D]"
                         : entry.isHumanAverage
-                          ? "border-t border-[#E5DFD5] bg-[#F6F1E7]/60 italic text-[#18283D]/90"
+                          ? "border-t border-[#E5DFD5] bg-[#F6F1E7]/60 text-[#18283D]/90"
                           : "border-t border-[#E5DFD5] text-[#18283D]/90"
                     }
                   >
@@ -964,8 +994,12 @@ export default function Game() {
           </p>
 
           <p className="mt-2 text-sm text-[#18283D]/70">
-            Human average and model results are based on different numbers of attempts
-            and are not directly comparable.
+            The displayed human average result is a micro-average across 
+            contributed, reviewed scores (total correct answers divided by total 
+            attempts). Model results are based on a single attempt at every 
+            question in the test set. As such the human average is also not directly 
+            comparable but with a large enough number of attempts gives an indicative
+            level of performance.
           </p>
 
           <p className="mt-4">
@@ -980,99 +1014,17 @@ export default function Game() {
           </p>
 
           {leaderboardStatus !== "unconfigured" && leaderboardStatus !== "idle" && (
-            <section className="mt-10">
-              <h2 className="font-serif text-xl font-semibold">Community leaderboard</h2>
-              <p className="mt-1 text-sm text-[#18283D]/70">
-                Approved, opted-in submissions only. Ranked by accuracy, then
-                correct count.
-              </p>
-
-              {leaderboardStatus === "loading" && (
-                <p className="mt-4 text-sm text-[#18283D]/60">Loading leaderboard&hellip;</p>
-              )}
-
-              {leaderboardStatus === "error" && (
-                <p className="mt-4 text-sm text-[#C6534B]">
-                  The leaderboard could not be loaded. Check your connection and try again.
-                </p>
-              )}
-
-              {leaderboardStatus === "empty" && (
-                <p className="mt-4 text-sm text-[#18283D]/60">
-                  No approved entries yet. Be the first to submit a score.
-                </p>
-              )}
-
-              {leaderboardStatus === "ok" && (
-                <>
-                  <div className="mt-4 overflow-x-auto rounded-xl border border-[#E5DFD5]">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-[#ECE5D8] font-medium text-[#18283D]">
-                        <tr>
-                          <th scope="col" className="px-4 py-3 text-right w-12">
-                            Rank
-                          </th>
-                          <th scope="col" className="px-4 py-3">
-                            Initials
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-right">
-                            Accuracy
-                          </th>
-                          <th scope="col" className="px-4 py-3 text-right">
-                            Score
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leaderboardEntries.map((entry, index) => {
-                          const globalRank =
-                            (leaderboardPage - 1) * LEADERBOARD_PAGE_SIZE + index + 1;
-                          return (
-                            <tr
-                              key={`${entry.displayName}-${globalRank}`}
-                              className="border-t border-[#E5DFD5] text-[#18283D]/90"
-                            >
-                              <td className="px-4 py-3 text-right tabular-nums text-[#18283D]/60">
-                                {globalRank}
-                              </td>
-                              <td className="px-4 py-3 font-medium">{entry.displayName}</td>
-                              <td className="px-4 py-3 text-right tabular-nums">
-                                {formatPercent(entry.accuracy)}
-                              </td>
-                              <td className="px-4 py-3 text-right tabular-nums text-[#18283D]/70">
-                                {entry.correctCount}/{entry.questionsAnswered}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {(leaderboardPage > 1 || leaderboardHasNext) && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <button
-                        type="button"
-                        disabled={leaderboardPage <= 1}
-                        onClick={() => setLeaderboardPage((p) => p - 1)}
-                        className="rounded-lg border border-[#18283D]/30 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-[#F2ECE1] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-sm text-[#18283D]/60">Page {leaderboardPage}</span>
-                      <button
-                        type="button"
-                        disabled={!leaderboardHasNext}
-                        onClick={() => setLeaderboardPage((p) => p + 1)}
-                        className="rounded-lg border border-[#18283D]/30 px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-[#F2ECE1] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
+            <div className="mt-10">
+              <CommunityLeaderboard
+                status={leaderboardStatus}
+                entries={leaderboardEntries}
+                page={leaderboardPage}
+                hasNext={leaderboardHasNext}
+                pageSize={LEADERBOARD_PAGE_SIZE}
+                onPrevious={() => setLeaderboardPage((p) => p - 1)}
+                onNext={() => setLeaderboardPage((p) => p + 1)}
+              />
+            </div>
           )}
 
           <button

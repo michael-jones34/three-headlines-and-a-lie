@@ -25,7 +25,7 @@ import {
   type SubmitResult,
 } from "../lib/scoring";
 import ReactMarkdown from "react-markdown";
-import CommunityLeaderboard from "./CommunityLeaderboard";
+import CommunityLeaderboard, { type LeaderboardStatus } from "./CommunityLeaderboard";
 
 const BENCHMARK_RESULTS = modelResults as Record<string, number>;
 
@@ -151,9 +151,7 @@ export default function Game() {
   const [leaderboardPage, setLeaderboardPage] = useState(1);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [leaderboardHasNext, setLeaderboardHasNext] = useState(false);
-  const [leaderboardStatus, setLeaderboardStatus] = useState<
-    "idle" | "loading" | "ok" | "empty" | "error" | "unconfigured"
-  >("idle");
+  const [leaderboardStatus, setLeaderboardStatus] = useState<LeaderboardStatus>("idle");
   const leaderboardFetchedPagesRef = useRef<Set<number>>(new Set());
 
   const [fadeState, setFadeState] = useState<"in" | "out">("in");

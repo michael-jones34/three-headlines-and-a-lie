@@ -685,6 +685,41 @@ export default function Game() {
             </button>
           </p>
 
+          <p className="mt-4 text-[#18283D]/80 leading-relaxed">
+            This project explores how well humans and machine learning models can
+            distinguish genuine news headlines from fabricated ones.
+          </p>
+
+          <p className="mt-3 text-[#18283D]/80 leading-relaxed">
+            The work began with a collection of headline quizzes from Morning Brew,
+            which were curated and structured into a dataset suitable for machine
+            learning. This provided labelled examples of real and fabricated
+            headlines that could be used to train and evaluate predictive models.
+          </p>
+
+          <p className="mt-3 text-[#18283D]/80 leading-relaxed">
+            Several different approaches were investigated, ranging from
+            traditional natural language processing techniques, such as TF-IDF
+            and logistic regression, to modern transformer-based models including
+            MiniLM and DistilBERT. An instruction-tuned large language model,
+            Llama 3.2, was also fine-tuned using parameter-efficient training
+            techniques.
+          </p>
+
+          <p className="mt-3 text-[#18283D]/80 leading-relaxed">
+            The models were evaluated against held-out data to assess how well
+            they could generalise to headlines they had not encountered during
+            training. Their performance provides an interesting comparison
+            between different modelling approaches, from relatively lightweight
+            classifiers to larger language models.
+          </p>
+
+          <p className="mt-3 text-[#18283D]/80 leading-relaxed">
+            Now it's your turn. Play the quizzes, test your own ability to spot
+            fabricated headlines, and see how your performance compares with
+            the models.
+          </p>
+
           <p className="mt-8 border-t border-[#E5DFD5] pt-4 text-sm text-[#18283D]/60">
             Source data and headline content credited to{" "}
             <a
@@ -950,6 +985,17 @@ export default function Game() {
             benchmark scores achieved by different machine learning models.
           </p>
 
+          <p className="mt-4">
+            <button
+              type="button"
+              disabled={isTransitioning}
+              onClick={() => navigateWithTransition(() => setShowModels(true))}
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
+            >
+              What are these models?
+            </button>
+          </p>
+
           <div className="mt-4 overflow-x-auto rounded-xl border border-[#E5DFD5]">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#ECE5D8] font-medium text-[#18283D]">
@@ -1000,17 +1046,6 @@ export default function Game() {
             question in the test set. As such the human average is also not directly 
             comparable but with a large enough number of attempts gives an indicative
             level of performance.
-          </p>
-
-          <p className="mt-4">
-            <button
-              type="button"
-              disabled={isTransitioning}
-              onClick={() => navigateWithTransition(() => setShowModels(true))}
-              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18283D] motion-reduce:transition-none"
-            >
-              What are these models?
-            </button>
           </p>
 
           {leaderboardStatus !== "unconfigured" && leaderboardStatus !== "idle" && (

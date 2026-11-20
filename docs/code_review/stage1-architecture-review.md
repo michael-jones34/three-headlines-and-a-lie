@@ -3,7 +3,8 @@
 **Application:** Three Headlines and a Lie (3H1L)
 **Scope:** `web/` directory and its supporting configuration
 **Date:** 2026-11-20
-**Status:** Read-only review — no files were modified
+**Status:** Read-only review — no files were modified at time of original review
+**Last updated:** 2026-11-20 — Findings 8 and 9 marked as addressed following post-review changes
 
 ---
 
@@ -167,13 +168,14 @@ Both `navigateWithTransition` and `advanceToNextQuestion` read `window.matchMedi
 
 ---
 
-### Finding 8 — Hardcoded magic numbers in `submitAttempt` validation
+### Finding 8 — Hardcoded magic numbers in `submitAttempt` validation ✓ Addressed
 
 | Attribute | Detail |
 |-----------|--------|
 | **Severity** | Low |
-| **Files** | `src/lib/scoring.ts` (lines 62–63) |
+| **Files** | `src/lib/scoring.ts` (lines 62–63), `src/lib/game.ts` |
 | **Category** | Maintainability |
+| **Status** | **Addressed — 2026-11-20** |
 
 ```ts
 questionsAnswered < 10 ||
@@ -184,19 +186,24 @@ The values `10` and `67` are significant game constants (minimum questions and t
 
 **Recommended action:** Export a `TOTAL_QUIZZES = 67` constant from `lib/game.ts` and import both `MIN_QUESTIONS` and `TOTAL_QUIZZES` in `scoring.ts`. This makes the relationship between the validation bounds and the actual dataset size explicit and keeps constants in one place.
 
+**Resolution:** `TOTAL_QUIZZES = 67` has been added and exported from `lib/game.ts` alongside the existing `MIN_QUESTIONS`. `scoring.ts` now imports both constants and uses them in the `submitAttempt` validation condition (`questionsAnswered < MIN_QUESTIONS || questionsAnswered > TOTAL_QUIZZES`). The magic literals have been removed. The change is consistent with the existing constant pattern and keeps all game-rule values in a single authoritative location. TypeScript check passed.
+
 ---
 
-### Finding 9 — `LeaderboardStatus` type is defined in `CommunityLeaderboard.tsx` but conceptually belongs in `scoring.ts`
+### Finding 9 — `LeaderboardStatus` type is defined in `CommunityLeaderboard.tsx` but conceptually belongs in `scoring.ts` ✓ Addressed
 
 | Attribute | Detail |
 |-----------|--------|
 | **Severity** | Low |
 | **Files** | `src/components/CommunityLeaderboard.tsx` (lines 11–17), `src/components/Game.tsx` (lines 154–156) |
 | **Category** | Separation of concerns |
+| **Status** | **Addressed — 2026-11-20** |
 
 `LeaderboardStatus` is a UI state machine type, so its location in the presentation component is defensible. But `Game.tsx` duplicates the full union inline in its `useState` declaration rather than importing the exported type. The type is exported from `CommunityLeaderboard.tsx` but not imported in `Game.tsx`, meaning the two definitions must be kept in sync manually.
 
 **Recommended action:** Import `LeaderboardStatus` from `CommunityLeaderboard.tsx` in `Game.tsx` instead of re-declaring it. One line change.
+
+**Resolution:** `Game.tsx` now imports `LeaderboardStatus` directly from `CommunityLeaderboard.tsx` via the existing component import line (`import CommunityLeaderboard, { type LeaderboardStatus } from "./CommunityLeaderboard"`). The inline union declaration in the `useState` call has been removed and replaced with the imported type. The authoritative definition remains in `CommunityLeaderboard.tsx`, which is the correct location for a type that describes that component's status prop. TypeScript check passed.
 
 ---
 
@@ -297,20 +304,20 @@ The Tailwind 4 / Turbopack integration via `@tailwindcss/turbopack` is in `devDe
 
 ## Summary Table
 
-| # | Finding | Severity | Type |
-|---|---------|----------|------|
-| 1 | `Game.tsx` size — all state, rendering and effects in one file | Medium | Genuine issue |
-| 2 | `showModels` bypasses the `screen` state machine | Low | Genuine issue |
-| 3 | `fetchLeaderboard` has an unnecessary dual overloaded signature | Low | Genuine issue |
-| 4 | Leaderboard page cache discards previous page on navigation | Low | Genuine issue |
-| 5 | `modelResults as Record<string, number>` type assertion | Low | Optional improvement |
-| 6 | `inert={false}` redundant but harmless | Low | Observation |
-| 7 | `prefers-reduced-motion` check duplicated across two functions | Low | Optional improvement |
-| 8 | Magic numbers `10` and `67` in `scoring.ts` | Low | Genuine issue |
-| 9 | `LeaderboardStatus` type re-declared inline rather than imported | Low | Genuine issue |
-| 10 | No GitHub Actions CI workflow | Low | Genuine issue |
-| 11 | Unused default Next.js placeholder SVGs in `public/` | Observation | Optional cleanup |
-| 12 | `eslint-config-next` version pinned out of step with `next` | Observation | Optional cleanup |
+| # | Finding | Severity | Type | Status |
+|---|---------|----------|------|--------|
+| 1 | `Game.tsx` size — all state, rendering and effects in one file | Medium | Genuine issue | Open |
+| 2 | `showModels` bypasses the `screen` state machine | Low | Genuine issue | Open |
+| 3 | `fetchLeaderboard` has an unnecessary dual overloaded signature | Low | Genuine issue | Open |
+| 4 | Leaderboard page cache discards previous page on navigation | Low | Genuine issue | Open |
+| 5 | `modelResults as Record<string, number>` type assertion | Low | Optional improvement | Open |
+| 6 | `inert={false}` redundant but harmless | Low | Observation | Open |
+| 7 | `prefers-reduced-motion` check duplicated across two functions | Low | Optional improvement | Open |
+| 8 | Magic numbers `10` and `67` in `scoring.ts` | Low | Genuine issue | ✓ Addressed |
+| 9 | `LeaderboardStatus` type re-declared inline rather than imported | Low | Genuine issue | ✓ Addressed |
+| 10 | No GitHub Actions CI workflow | Low | Genuine issue | Open |
+| 11 | Unused default Next.js placeholder SVGs in `public/` | Observation | Optional cleanup | Open |
+| 12 | `eslint-config-next` version pinned out of step with `next` | Observation | Optional cleanup | Open |
 
 ---
 

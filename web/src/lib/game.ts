@@ -19,6 +19,8 @@ export interface AnswerRecord {
 
 export const MIN_QUESTIONS = 10;
 
+export const TOTAL_QUIZZES = 67;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

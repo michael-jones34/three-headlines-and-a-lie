@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "./supabase";
+import { MIN_QUESTIONS, TOTAL_QUIZZES } from "./game";
 
 export interface SubmitAttemptParams {
   attemptId: string;
@@ -59,8 +60,8 @@ export async function submitAttempt(
   // Validate params before sending.
   if (
     !attemptId ||
-    questionsAnswered < 10 ||
-    questionsAnswered > 67 ||
+    questionsAnswered < MIN_QUESTIONS ||
+    questionsAnswered > TOTAL_QUIZZES ||
     correctCount < 0 ||
     correctCount > questionsAnswered
   ) {

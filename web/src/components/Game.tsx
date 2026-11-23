@@ -152,7 +152,6 @@ export default function Game() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [leaderboardHasNext, setLeaderboardHasNext] = useState(false);
   const [leaderboardStatus, setLeaderboardStatus] = useState<LeaderboardStatus>("idle");
-  const leaderboardFetchedPagesRef = useRef<Set<number>>(new Set());
 
   const [fadeState, setFadeState] = useState<"in" | "out">("in");
   const [questionFadeState, setQuestionFadeState] = useState<"in" | "out">("in");
@@ -333,7 +332,6 @@ export default function Game() {
   // request page_size+1 rows — which the RPC caps at 50 anyway.
   useEffect(() => {
     if (screen !== "results" && screen !== "leaderboard") return;
-    if (leaderboardFetchedPagesRef.current.has(leaderboardPage)) return;
 
     let cancelled = false;
 
@@ -350,7 +348,6 @@ export default function Game() {
         return;
       }
 
-      leaderboardFetchedPagesRef.current.add(leaderboardPage);
       const displayEntries = result.entries;
       setLeaderboardEntries(displayEntries);
 
@@ -408,7 +405,6 @@ export default function Game() {
     setLeaderboardEntries([]);
     setLeaderboardHasNext(false);
     setLeaderboardStatus("idle");
-    leaderboardFetchedPagesRef.current = new Set();
     isSubmittingRef.current = false;
     setScreen("playing");
   }

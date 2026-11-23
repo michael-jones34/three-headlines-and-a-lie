@@ -4,7 +4,7 @@
 **Scope:** `web/` directory and its supporting configuration
 **Date:** 2026-11-20
 **Status:** Read-only review — no files were modified at time of original review
-**Last updated:** 2026-11-20 — Findings 8 and 9 marked as addressed following post-review changes
+**Last updated:** 2026-11-23 — Finding 4 marked as addressed following post-review changes (Findings 8 and 9 addressed 2026-11-20)
 
 ---
 
@@ -102,19 +102,26 @@ The application has a `screen` state with values `"start" | "playing" | "submit"
 
 ---
 
-### Finding 4 — Leaderboard page cache discards previous pages on navigation
+### Finding 4 — Leaderboard page cache discards previous pages on navigation ✓ Addressed
 
 | Attribute | Detail |
 |-----------|--------|
 | **Severity** | Low |
 | **Files** | `src/components/Game.tsx` (lines 336–391, 150–157) |
 | **Category** | State management |
+| **Status** | **Addressed — 2026-11-23** |
 
 `leaderboardFetchedPagesRef` tracks which page numbers have been fetched, but `leaderboardEntries` is replaced (not accumulated) on each fetch. When the user moves from page 2 back to page 1, the effect correctly skips the fetch (page 1 is in the set), but the display shows page 2's entries until the state updates. In practice, since the page-1 fetch was already completed, the stale display is very brief — but only because the initial load populates entries immediately. If a user navigates away and returns, the cache is reset and re-fetched correctly.
 
 This is a minor UX inconsistency rather than a correctness bug.
 
 **Recommended action:** No action required for the current scope. If leaderboard UX is revisited, accumulate all fetched entries in a `Map<number, LeaderboardEntry[]>` and derive the displayed slice from `page`.
+
+**Resolution:** The page-tracking cache has been removed entirely. `leaderboardFetchedPagesRef` (the `useRef<Set<number>>` declaration, its reset in `startGame`, and the early-return guard and `add` call in the fetch effect) have all been deleted. The existing `useEffect` already runs on every `[screen, leaderboardPage]` change, so removing the deduplication means every page visit — including revisits — triggers a fresh fetch that overwrites `leaderboardEntries` with the correct page's data. This is a simpler and correct approach given that the leaderboard is not cached between sessions anyway.
+
+This is a different resolution from the one suggested in the original recommendation (accumulating entries in a `Map`). Rather than adding complexity to serve previously fetched data instantly, the fix instead removes the mechanism that caused stale data to be shown. The trade-off is an additional network request on page revisit, which is acceptable given the small dataset and infrequent pagination use.
+
+**Verification:** TypeScript check passed with no errors. Manual behavioural verification remains outstanding — the community leaderboard is currently empty, so the pagination flow could not be exercised in the UI.
 
 ---
 
@@ -309,7 +316,7 @@ The Tailwind 4 / Turbopack integration via `@tailwindcss/turbopack` is in `devDe
 | 1 | `Game.tsx` size — all state, rendering and effects in one file | Medium | Genuine issue | Open |
 | 2 | `showModels` bypasses the `screen` state machine | Low | Genuine issue | Open |
 | 3 | `fetchLeaderboard` has an unnecessary dual overloaded signature | Low | Genuine issue | Open |
-| 4 | Leaderboard page cache discards previous page on navigation | Low | Genuine issue | Open |
+| 4 | Leaderboard page cache discards previous page on navigation | Low | Genuine issue | ✓ Addressed |
 | 5 | `modelResults as Record<string, number>` type assertion | Low | Optional improvement | Open |
 | 6 | `inert={false}` redundant but harmless | Low | Observation | Open |
 | 7 | `prefers-reduced-motion` check duplicated across two functions | Low | Optional improvement | Open |

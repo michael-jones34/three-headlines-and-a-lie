@@ -649,7 +649,7 @@ export default function Game() {
           </p>
 
           <p className="mt-3 text-[#18283D]/70">
-            There are {quizData.length} quizzes available.
+            There are {quizData.length} questions available.
           </p>
 
           <p className="mt-3 text-[#18283D]/70">

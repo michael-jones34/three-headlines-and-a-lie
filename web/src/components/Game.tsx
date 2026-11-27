@@ -643,6 +643,27 @@ export default function Game() {
             Three Headlines and a Lie
           </h1>
 
+          <p className="mt-1 text-sm text-[#18283D]/60">
+            Created by Michael Jones ·{" "}
+            <a
+              href="https://www.linkedin.com/in/michaeljones24/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-[#C6534B]"
+            >
+              LinkedIn
+            </a>
+            {" · "}
+            <a
+              href="https://github.com/michael-jones34"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-[#C6534B]"
+            >
+              GitHub
+            </a>
+          </p>
+
           <p className="mt-4 text-lg text-[#18283D]/90">
             Four headlines. Three are real, and one is fabricated. Can you
             spot the lie?

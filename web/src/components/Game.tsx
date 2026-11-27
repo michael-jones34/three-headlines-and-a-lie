@@ -649,7 +649,7 @@ export default function Game() {
               href="https://www.linkedin.com/in/michaeljones24/"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-[#C6534B]"
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B]"
             >
               LinkedIn
             </a>
@@ -658,10 +658,21 @@ export default function Game() {
               href="https://github.com/michael-jones34"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-[#C6534B]"
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B]"
             >
               GitHub
             </a>
+            {" · "}
+            Source data and headline content credited to{" "}
+            <a
+              href="https://www.morningbrew.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B]"
+            >
+              Morning Brew
+            </a>.
+
           </p>
 
           <p className="mt-4 text-lg text-[#18283D]/90">
@@ -733,18 +744,6 @@ export default function Game() {
             Now it's your turn. Play the quizzes, test your own ability to spot
             fabricated headlines, and see how your performance compares with
             the models.
-          </p>
-
-          <p className="mt-8 border-t border-[#E5DFD5] pt-4 text-sm text-[#18283D]/60">
-            Source data and headline content credited to{" "}
-            <a
-              href="https://www.morningbrew.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-[#18283D] underline underline-offset-2 transition-colors duration-150 hover:text-[#C6534B]"
-            >
-              Morning Brew
-            </a>.
           </p>
         </div>
       </main>
